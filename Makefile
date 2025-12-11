@@ -10,6 +10,6 @@ TWEAK_NAME = IDFVSpoofer
 
 IDFVSpoofer_FILES = Tweak.x
 IDFVSpoofer_CFLAGS = -fobjc-arc -Wno-deprecated-declarations
-IDFVSpoofer_FRAMEWORKS = UIKit Foundation Security
+IDFVSpoofer_FRAMEWORKS = UIKit Foundation
 
 include $(THEOS_MAKE_PATH)/tweak.mk
