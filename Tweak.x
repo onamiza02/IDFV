@@ -1,14 +1,10 @@
 /*
  * IDFVSpoofer - Auto Random IDFV Every App Launch
  * สำหรับ bypass device ban ใน GGPoker และแอพอื่นๆ
- *
- * ทำงาน: Hook UIDevice.identifierForVendor
- * ผลลัพธ์: Random UUID ใหม่ทุกครั้งที่เปิดแอพ + แจ้งเตือน
  */
 
 #import <UIKit/UIKit.h>
 
-// เก็บ UUID ที่ random ไว้ใช้ตลอด session
 static NSUUID *spoofedUUID = nil;
 static BOOL hasShownAlert = NO;
 
@@ -19,7 +15,6 @@ static BOOL hasShownAlert = NO;
         spoofedUUID = [NSUUID UUID];
         NSLog(@"[IDFVSpoofer] New IDFV: %@", [spoofedUUID UUIDString]);
 
-        // แสดง Alert แจ้งเตือน
         if (!hasShownAlert) {
             hasShownAlert = YES;
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
@@ -34,12 +29,27 @@ static BOOL hasShownAlert = NO;
                     handler:nil];
                 [alert addAction:ok];
 
-                UIWindow *window = [[UIApplication sharedApplication] keyWindow];
-                UIViewController *root = window.rootViewController;
-                while (root.presentedViewController) {
-                    root = root.presentedViewController;
+                // iOS 13+ compatible way to get key window
+                UIWindow *window = nil;
+                for (UIWindowScene *scene in [UIApplication sharedApplication].connectedScenes) {
+                    if (scene.activationState == UISceneActivationStateForegroundActive) {
+                        for (UIWindow *w in scene.windows) {
+                            if (w.isKeyWindow) {
+                                window = w;
+                                break;
+                            }
+                        }
+                    }
+                    if (window) break;
                 }
-                [root presentViewController:alert animated:YES completion:nil];
+
+                if (window) {
+                    UIViewController *root = window.rootViewController;
+                    while (root.presentedViewController) {
+                        root = root.presentedViewController;
+                    }
+                    [root presentViewController:alert animated:YES completion:nil];
+                }
             });
         }
     }
