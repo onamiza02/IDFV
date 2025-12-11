@@ -1,8 +1,8 @@
 Package: com.custom.idfvspoofer
 Name: IDFVSpoofer
-Version: 1.1.0
+Version: 2.0.0
 Architecture: iphoneos-arm64
-Description: Auto randomize IDFV on every app launch. Shows alert with new IDFV.
+Description: Complete Device ID Spoofer - Hook IDFV, Keychain, UserDefaults with full logging.
 Maintainer: Custom
 Author: Custom
 Section: Tweaks
