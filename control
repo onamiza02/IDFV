@@ -1,0 +1,9 @@
+Package: com.custom.idfvspoofer
+Name: IDFVSpoofer
+Version: 1.0.0
+Architecture: iphoneos-arm64
+Description: Auto randomize IDFV (identifierForVendor) on every app launch. Bypass device bans in GGPoker and other apps.
+Maintainer: Custom
+Author: Custom
+Section: Tweaks
+Depends: mobilesubstrate
