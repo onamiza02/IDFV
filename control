@@ -6,4 +6,4 @@ Description: Complete Device ID Spoofer - Hook IDFV, Keychain, UserDefaults with
 Maintainer: Custom
 Author: Custom
 Section: Tweaks
-Depends: mobilesubstrate
+Depends: substrate-safemode | com.saurik.substrate.safemode
