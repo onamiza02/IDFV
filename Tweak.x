@@ -119,9 +119,46 @@ static void initSpoofedValues() {
         NSLog(@"[IDFVSpoofer] v5.0 Loaded in: %@", bundleID);
         initSpoofedValues();
 
-        // Don't clear keychain - just spoof IDFV every launch
-        // Keychain clear causes crash on reopen
-        NSLog(@"[IDFVSpoofer] New UUID generated (no keychain clear)");
+        // Clear keychain BEFORE app fully loads (in background)
+        // Only delete device ID related items, not session/auth tokens
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
+            // Delete only specific services that store device IDs
+            NSArray *servicesToClear = @[
+                @"appsflyer",
+                @"branch",
+                @"deviceId",
+                @"device_id",
+                @"udid",
+                @"uuid",
+                @"analytics"
+            ];
+
+            for (NSString *service in servicesToClear) {
+                NSDictionary *query = @{
+                    (__bridge id)kSecClass: (__bridge id)kSecClassGenericPassword,
+                    (__bridge id)kSecAttrService: service
+                };
+                SecItemDelete((__bridge CFDictionaryRef)query);
+            }
+
+            // Also try deleting by account name patterns
+            NSArray *accountsToClear = @[
+                @"appsflyer",
+                @"branch_",
+                @"device",
+                @"anonymous"
+            ];
+
+            for (NSString *account in accountsToClear) {
+                NSDictionary *query = @{
+                    (__bridge id)kSecClass: (__bridge id)kSecClassGenericPassword,
+                    (__bridge id)kSecAttrAccount: account
+                };
+                SecItemDelete((__bridge CFDictionaryRef)query);
+            }
+
+            NSLog(@"[IDFVSpoofer] Cleared device ID keychain items (selective)");
+        });
 
         // Show popup
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
