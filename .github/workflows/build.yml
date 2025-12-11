@@ -1,29 +1,36 @@
-  name: Build iOS Tweak
+name: Build iOS Tweak
 
-  on:
-    push:
-      branches: [ main ]
-    pull_request:
-      branches: [ main ]
-    workflow_dispatch:
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
 
-  jobs:
-    build:
-      runs-on: macos-latest
+jobs:
+  build:
+    runs-on: macos-latest
 
-      steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
 
-      - name: Setup Theos
-        uses: Randomblock1/theos-action@v1
+    - name: Setup Theos
+      uses: Randomblock1/theos-action@v1
 
-      - name: Build Package
-        run: |
-          make package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless
+    - name: Build Package
+      run: |
+        make package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless
 
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: IDFVSpoofer-rootless
-          path: packages/*.deb
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: IDFVSpoofer-rootless
+        path: packages/*.deb
+
+    - name: Create Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: packages/*.deb
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

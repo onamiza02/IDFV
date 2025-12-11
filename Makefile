@@ -10,3 +10,6 @@ IDFVSpoofer_CFLAGS = -fobjc-arc -Wno-deprecated-declarations
 IDFVSpoofer_FRAMEWORKS = UIKit Foundation Security
 
 include $(THEOS_MAKE_PATH)/tweak.mk
+
+SUBPROJECTS += idfvspooferprefs
+include $(THEOS_MAKE_PATH)/aggregate.mk
