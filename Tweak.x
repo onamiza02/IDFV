@@ -119,33 +119,9 @@ static void initSpoofedValues() {
         NSLog(@"[IDFVSpoofer] v5.0 Loaded in: %@", bundleID);
         initSpoofedValues();
 
-        // Clear keychain ONLY on first launch (check flag)
-        NSString *flagKey = @"IDFVSpoofer_KeychainCleared";
-        NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-
-        if (![defaults boolForKey:flagKey]) {
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-                NSArray *accessGroups = @[
-                    @"XLY9G25U9L.com.nsus.ggpcom",
-                    @"XLY9G25U9L.com.nsus.ggpoker"
-                ];
-
-                for (NSString *group in accessGroups) {
-                    NSDictionary *query = @{
-                        (__bridge id)kSecClass: (__bridge id)kSecClassGenericPassword,
-                        (__bridge id)kSecAttrAccessGroup: group
-                    };
-                    OSStatus status = SecItemDelete((__bridge CFDictionaryRef)query);
-                    NSLog(@"[IDFVSpoofer] Cleared keychain %@: %d", group, (int)status);
-                }
-
-                [defaults setBool:YES forKey:flagKey];
-                [defaults synchronize];
-                NSLog(@"[IDFVSpoofer] Keychain cleared (first launch only)");
-            });
-        } else {
-            NSLog(@"[IDFVSpoofer] Keychain already cleared, skipping");
-        }
+        // Don't clear keychain - just spoof IDFV every launch
+        // Keychain clear causes crash on reopen
+        NSLog(@"[IDFVSpoofer] New UUID generated (no keychain clear)");
 
         // Show popup
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
