@@ -52,21 +52,37 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>Keychain</string>
+			<string>Keychain Options</string>
 			<key>footerText</key>
-			<string>Keychain Clear deletes device IDs on app launch. May cause crash if deletes session tokens.</string>
+			<string>Choose ONE method:
+- Keychain Spoof (recommended): Hook reads to return fake ID every time. No crash!
+- Keychain Clear: Delete keychain once on first launch. May crash if deletes session.</string>
 		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSSwitchCell</string>
 			<key>default</key>
 			<true/>
+			<key>defaults</key>
+			<string>com.custom.idfvspoofer</string>
+			<key>key</key>
+			<string>EnableKeychainSpoof</string>
+			<key>label</key>
+			<string>Keychain Spoof (Recommended)</string>
+			<key>PostNotification</key>
+			<string>com.custom.idfvspoofer/prefschanged</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>default</key>
+			<false/>
 			<key>defaults</key>
 			<string>com.custom.idfvspoofer</string>
 			<key>key</key>
 			<string>EnableKeychainClear</string>
 			<key>label</key>
-			<string>Keychain Clear (on launch)</string>
+			<string>Keychain Clear (Once)</string>
 			<key>PostNotification</key>
 			<string>com.custom.idfvspoofer/prefschanged</string>
 		</dict>
@@ -74,15 +90,23 @@
 			<key>cell</key>
 			<string>PSSwitchCell</string>
 			<key>default</key>
-			<true/>
+			<false/>
 			<key>defaults</key>
 			<string>com.custom.idfvspoofer</string>
 			<key>key</key>
-			<string>EnableKeychainHook</string>
+			<string>EnableKeychainLog</string>
 			<key>label</key>
-			<string>Keychain Hook (log read/write)</string>
+			<string>Keychain Debug Log</string>
 			<key>PostNotification</key>
 			<string>com.custom.idfvspoofer/prefschanged</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSButtonCell</string>
+			<key>label</key>
+			<string>Reset Keychain Flag</string>
+			<key>action</key>
+			<string>resetKeychainFlag</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -114,7 +138,7 @@
 			<key>cell</key>
 			<string>PSStaticTextCell</string>
 			<key>label</key>
-			<string>IDFVSpoofer v5.1.2</string>
+			<string>IDFVSpoofer v5.2</string>
 		</dict>
 		<dict>
 			<key>cell</key>
