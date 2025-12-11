@@ -1,7 +1,8 @@
-TARGET := iphone:clang:latest:15.0
+TARGET := iphone:clang:latest:14.0
 INSTALL_TARGET_PROCESSES = GGPoker
 
-THEOS_PACKAGE_SCHEME = rootless
+# Rootful for iPhone X + palera1n
+THEOS_PACKAGE_SCHEME = rootful
 
 include $(THEOS)/makefiles/common.mk
 
