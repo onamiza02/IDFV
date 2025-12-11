@@ -1,16 +1,44 @@
 /*
- * IDFVSpoofer v5.0 - GGPoker Device Ban Bypass
- * Hooks: IDFV + NSUserDefaults + Keychain
+ * IDFVSpoofer v5.1 - GGPoker Device Ban Bypass
+ * With Settings UI for testing each feature
  */
 
 #import <UIKit/UIKit.h>
 #import <Foundation/Foundation.h>
 #import <Security/Security.h>
-#import <dlfcn.h>
+
+// Settings keys
+#define PREF_PATH @"/var/mobile/Library/Preferences/com.custom.idfvspoofer.plist"
+#define kEnableIDFV @"EnableIDFV"
+#define kEnableNSUserDefaults @"EnableNSUserDefaults"
+#define kEnableKeychainClear @"EnableKeychainClear"
+#define kEnableKeychainHook @"EnableKeychainHook"
+#define kEnablePopup @"EnablePopup"
 
 static NSUUID *g_spoofedUUID = nil;
 static NSString *g_spoofedString = nil;
 static NSString *g_spoofedAnimationID = nil;
+static NSDictionary *g_prefs = nil;
+
+static void loadPrefs() {
+    g_prefs = [NSDictionary dictionaryWithContentsOfFile:PREF_PATH];
+    if (!g_prefs) {
+        // Default: all enabled
+        g_prefs = @{
+            kEnableIDFV: @YES,
+            kEnableNSUserDefaults: @YES,
+            kEnableKeychainClear: @YES,
+            kEnableKeychainHook: @YES,
+            kEnablePopup: @YES
+        };
+    }
+}
+
+static BOOL prefEnabled(NSString *key) {
+    if (!g_prefs) loadPrefs();
+    NSNumber *val = g_prefs[key];
+    return val ? [val boolValue] : YES; // Default YES
+}
 
 static void initSpoofedValues() {
     if (!g_spoofedUUID) {
@@ -24,7 +52,6 @@ static void initSpoofedValues() {
         g_spoofedAnimationID = [hexString lowercaseString];
 
         NSLog(@"[IDFVSpoofer] Spoofed IDFV: %@", g_spoofedString);
-        NSLog(@"[IDFVSpoofer] Spoofed AnimationID: %@", g_spoofedAnimationID);
     }
 }
 
@@ -32,6 +59,10 @@ static void initSpoofedValues() {
 %hook UIDevice
 
 - (NSUUID *)identifierForVendor {
+    if (!prefEnabled(kEnableIDFV)) {
+        NSLog(@"[IDFVSpoofer] IDFV hook DISABLED");
+        return %orig;
+    }
     initSpoofedValues();
     NSLog(@"[IDFVSpoofer] IDFV HOOKED -> %@", g_spoofedString);
     return g_spoofedUUID;
@@ -43,6 +74,10 @@ static void initSpoofedValues() {
 %hook NSUserDefaults
 
 - (id)objectForKey:(NSString *)key {
+    if (!prefEnabled(kEnableNSUserDefaults)) {
+        return %orig;
+    }
+
     if ([key isEqualToString:@"animati0nID"]) {
         initSpoofedValues();
         NSLog(@"[IDFVSpoofer] animati0nID HOOKED");
@@ -65,6 +100,11 @@ static void initSpoofedValues() {
 }
 
 - (void)setObject:(id)value forKey:(NSString *)key {
+    if (!prefEnabled(kEnableNSUserDefaults)) {
+        %orig;
+        return;
+    }
+
     if ([key isEqualToString:@"animati0nID"] ||
         [key isEqualToString:@"randomSeedForValue"] ||
         [key isEqualToString:@"AppsFlyerUserId"] ||
@@ -77,33 +117,25 @@ static void initSpoofedValues() {
 
 %end
 
-// ==================== HOOK Keychain Wrapper Classes ====================
+// ==================== HOOK Keychain Wrapper ====================
 %hook KeychainItemWrapper
 
 - (id)objectForKey:(id)key {
+    if (!prefEnabled(kEnableKeychainHook)) {
+        return %orig;
+    }
     id orig = %orig;
     NSLog(@"[IDFVSpoofer] KeychainItemWrapper read: %@", key);
     return orig;
 }
 
 - (void)setObject:(id)inObject forKey:(id)key {
+    if (!prefEnabled(kEnableKeychainHook)) {
+        %orig;
+        return;
+    }
     NSLog(@"[IDFVSpoofer] KeychainItemWrapper write: %@ = %@", key, inObject);
     %orig;
-}
-
-%end
-
-// ==================== HOOK Generic Keychain Access ====================
-%hook NSObject
-
-- (id)valueForUndefinedKey:(NSString *)key {
-    if ([key containsString:@"deviceId"] || [key containsString:@"DeviceId"] ||
-        [key containsString:@"UUID"] || [key containsString:@"uuid"]) {
-        initSpoofedValues();
-        NSLog(@"[IDFVSpoofer] valueForUndefinedKey HOOKED: %@ -> %@", key, g_spoofedString);
-        return g_spoofedString;
-    }
-    return %orig;
 }
 
 %end
@@ -116,73 +148,81 @@ static void initSpoofedValues() {
             return;
         }
 
-        NSLog(@"[IDFVSpoofer] v5.0 Loaded in: %@", bundleID);
+        loadPrefs();
+        NSLog(@"[IDFVSpoofer] v5.1 Loaded in: %@", bundleID);
+        NSLog(@"[IDFVSpoofer] Settings: IDFV=%d NSUserDefaults=%d KeychainClear=%d KeychainHook=%d Popup=%d",
+            prefEnabled(kEnableIDFV),
+            prefEnabled(kEnableNSUserDefaults),
+            prefEnabled(kEnableKeychainClear),
+            prefEnabled(kEnableKeychainHook),
+            prefEnabled(kEnablePopup));
+
         initSpoofedValues();
 
-        // Clear keychain BEFORE app fully loads (in background)
-        // Only delete device ID related items, not session/auth tokens
-        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
-            // Delete only specific services that store device IDs
-            NSArray *servicesToClear = @[
-                @"appsflyer",
-                @"branch",
-                @"deviceId",
-                @"device_id",
-                @"udid",
-                @"uuid",
-                @"analytics"
-            ];
+        // Keychain clear (if enabled)
+        if (prefEnabled(kEnableKeychainClear)) {
+            dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
+                NSArray *servicesToClear = @[
+                    @"appsflyer",
+                    @"branch",
+                    @"deviceId",
+                    @"device_id",
+                    @"udid",
+                    @"uuid",
+                    @"analytics"
+                ];
 
-            for (NSString *service in servicesToClear) {
-                NSDictionary *query = @{
-                    (__bridge id)kSecClass: (__bridge id)kSecClassGenericPassword,
-                    (__bridge id)kSecAttrService: service
-                };
-                SecItemDelete((__bridge CFDictionaryRef)query);
-            }
-
-            // Also try deleting by account name patterns
-            NSArray *accountsToClear = @[
-                @"appsflyer",
-                @"branch_",
-                @"device",
-                @"anonymous"
-            ];
-
-            for (NSString *account in accountsToClear) {
-                NSDictionary *query = @{
-                    (__bridge id)kSecClass: (__bridge id)kSecClassGenericPassword,
-                    (__bridge id)kSecAttrAccount: account
-                };
-                SecItemDelete((__bridge CFDictionaryRef)query);
-            }
-
-            NSLog(@"[IDFVSpoofer] Cleared device ID keychain items (selective)");
-        });
-
-        // Show popup
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-            UIAlertController *alert = [UIAlertController
-                alertControllerWithTitle:@"IDFVSpoofer v5.0"
-                message:[NSString stringWithFormat:@"Device Ban Bypass Active!\n\nSpoofed IDFV:\n%@\n\nHooked:\n- IDFV\n- NSUserDefaults\n- Keychain", g_spoofedString]
-                preferredStyle:UIAlertControllerStyleAlert];
-            [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
-
-            UIWindow *window = nil;
-            for (UIWindowScene *scene in [UIApplication sharedApplication].connectedScenes) {
-                if (scene.activationState == UISceneActivationStateForegroundActive) {
-                    for (UIWindow *w in scene.windows) {
-                        if (w.isKeyWindow) { window = w; break; }
-                    }
+                for (NSString *service in servicesToClear) {
+                    NSDictionary *query = @{
+                        (__bridge id)kSecClass: (__bridge id)kSecClassGenericPassword,
+                        (__bridge id)kSecAttrService: service
+                    };
+                    SecItemDelete((__bridge CFDictionaryRef)query);
                 }
-                if (window) break;
-            }
 
-            if (window) {
-                UIViewController *root = window.rootViewController;
-                while (root.presentedViewController) root = root.presentedViewController;
-                [root presentViewController:alert animated:YES completion:nil];
-            }
-        });
+                NSLog(@"[IDFVSpoofer] Keychain cleared (selective)");
+            });
+        }
+
+        // Show popup (if enabled)
+        if (prefEnabled(kEnablePopup)) {
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+                NSString *status = [NSString stringWithFormat:
+                    @"IDFV: %@\n\n"
+                    @"Settings:\n"
+                    @"• IDFV Hook: %@\n"
+                    @"• NSUserDefaults: %@\n"
+                    @"• Keychain Clear: %@\n"
+                    @"• Keychain Hook: %@",
+                    g_spoofedString,
+                    prefEnabled(kEnableIDFV) ? @"ON" : @"OFF",
+                    prefEnabled(kEnableNSUserDefaults) ? @"ON" : @"OFF",
+                    prefEnabled(kEnableKeychainClear) ? @"ON" : @"OFF",
+                    prefEnabled(kEnableKeychainHook) ? @"ON" : @"OFF"
+                ];
+
+                UIAlertController *alert = [UIAlertController
+                    alertControllerWithTitle:@"IDFVSpoofer v5.1"
+                    message:status
+                    preferredStyle:UIAlertControllerStyleAlert];
+                [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
+
+                UIWindow *window = nil;
+                for (UIWindowScene *scene in [UIApplication sharedApplication].connectedScenes) {
+                    if (scene.activationState == UISceneActivationStateForegroundActive) {
+                        for (UIWindow *w in scene.windows) {
+                            if (w.isKeyWindow) { window = w; break; }
+                        }
+                    }
+                    if (window) break;
+                }
+
+                if (window) {
+                    UIViewController *root = window.rootViewController;
+                    while (root.presentedViewController) root = root.presentedViewController;
+                    [root presentViewController:alert animated:YES completion:nil];
+                }
+            });
+        }
     }
 }
