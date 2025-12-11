@@ -4,7 +4,6 @@ Auto randomize IDFV (identifierForVendor) on every app launch.
 
 ## Features
 - Random new IDFV every time you open the app
-- Bypass device bans in GGPoker, Natural8, and other apps
 - Works on rootless jailbreaks (Dopamine, palera1n)
 - No configuration needed - just install and forget
 
@@ -30,3 +29,4 @@ The tweak hooks `UIDevice.identifierForVendor` and returns a random UUID instead
 ```bash
 make package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless
 ```
+
