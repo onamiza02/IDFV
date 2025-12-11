@@ -1,0 +1,29 @@
+  name: Build iOS Tweak
+
+  on:
+    push:
+      branches: [ main ]
+    pull_request:
+      branches: [ main ]
+    workflow_dispatch:
+
+  jobs:
+    build:
+      runs-on: macos-latest
+
+      steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Theos
+        uses: Randomblock1/theos-action@v1
+
+      - name: Build Package
+        run: |
+          make package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: IDFVSpoofer-rootless
+          path: packages/*.deb
