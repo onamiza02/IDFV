@@ -10,7 +10,7 @@
 			<key>label</key>
 			<string>Main Hooks</string>
 			<key>footerText</key>
-			<string>IDFV is the main device identifier. Try disabling others first to find which causes crash.</string>
+			<string>IDFV is the main device identifier.</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -22,17 +22,9 @@
 			<key>key</key>
 			<string>EnableIDFV</string>
 			<key>label</key>
-			<string>IDFV Hook (identifierForVendor)</string>
+			<string>IDFV Hook</string>
 			<key>PostNotification</key>
 			<string>com.custom.idfvspoofer/prefschanged</string>
-		</dict>
-		<dict>
-			<key>cell</key>
-			<string>PSGroupCell</string>
-			<key>label</key>
-			<string>NSUserDefaults Hooks</string>
-			<key>footerText</key>
-			<string>Spoofs animati0nID, randomSeedForValue, AppsFlyerUserId stored in UserDefaults.</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -52,11 +44,9 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>Keychain Options</string>
+			<string>Keychain</string>
 			<key>footerText</key>
-			<string>Choose ONE method:
-- Keychain Spoof (recommended): Hook reads to return fake ID every time. No crash!
-- Keychain Clear: Delete keychain once on first launch. May crash if deletes session.</string>
+			<string>Clears keychain on FIRST launch only. Use Reset button to clear again.</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -66,23 +56,9 @@
 			<key>defaults</key>
 			<string>com.custom.idfvspoofer</string>
 			<key>key</key>
-			<string>EnableKeychainSpoof</string>
-			<key>label</key>
-			<string>Keychain Spoof (Recommended)</string>
-			<key>PostNotification</key>
-			<string>com.custom.idfvspoofer/prefschanged</string>
-		</dict>
-		<dict>
-			<key>cell</key>
-			<string>PSSwitchCell</string>
-			<key>default</key>
-			<false/>
-			<key>defaults</key>
-			<string>com.custom.idfvspoofer</string>
-			<key>key</key>
 			<string>EnableKeychainClear</string>
 			<key>label</key>
-			<string>Keychain Clear (Once)</string>
+			<string>Keychain Clear</string>
 			<key>PostNotification</key>
 			<string>com.custom.idfvspoofer/prefschanged</string>
 		</dict>
@@ -112,7 +88,7 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>UI Options</string>
+			<string>UI</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -124,7 +100,7 @@
 			<key>key</key>
 			<string>EnablePopup</string>
 			<key>label</key>
-			<string>Show Popup on Launch</string>
+			<string>Show Popup</string>
 			<key>PostNotification</key>
 			<string>com.custom.idfvspoofer/prefschanged</string>
 		</dict>
@@ -138,13 +114,13 @@
 			<key>cell</key>
 			<string>PSStaticTextCell</string>
 			<key>label</key>
-			<string>IDFVSpoofer v5.2</string>
+			<string>IDFVSpoofer v5.3</string>
 		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSStaticTextCell</string>
 			<key>label</key>
-			<string>Respring after changing settings!</string>
+			<string>Respring after changes!</string>
 		</dict>
 	</array>
 	<key>title</key>
