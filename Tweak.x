@@ -1,5 +1,5 @@
 /*
- * IDFVSpoofer v5.2.1 - GGPoker Device Ban Bypass
+ * IDFVSpoofer v5.2.2 - GGPoker Device Ban Bypass
  * With Settings UI for testing each feature
  *
  * 2 modes for Keychain:
@@ -10,7 +10,10 @@
 #import <UIKit/UIKit.h>
 #import <Foundation/Foundation.h>
 #import <Security/Security.h>
-#import <substrate.h>
+#import <dlfcn.h>
+
+// For rootless compatibility - declare MSHookFunction
+extern void MSHookFunction(void *symbol, void *replace, void **result);
 
 // Settings keys
 #define PREF_PATH @"/var/mobile/Library/Preferences/com.custom.idfvspoofer.plist"
