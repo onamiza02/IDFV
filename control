@@ -1,6 +1,6 @@
 Package: com.custom.idfvspoofer
 Name: IDFVSpoofer
-Version: 5.2.0
+Version: 5.2.1
 Architecture: iphoneos-arm64
 Description: Complete Device ID Spoofer - Hook IDFV, Keychain (Spoof/Clear), UserDefaults with Settings UI.
 Maintainer: Custom

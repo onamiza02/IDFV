@@ -1,5 +1,5 @@
 /*
- * IDFVSpoofer v5.2 - GGPoker Device Ban Bypass
+ * IDFVSpoofer v5.2.1 - GGPoker Device Ban Bypass
  * With Settings UI for testing each feature
  *
  * 2 modes for Keychain:
@@ -10,6 +10,7 @@
 #import <UIKit/UIKit.h>
 #import <Foundation/Foundation.h>
 #import <Security/Security.h>
+#import <substrate.h>
 
 // Settings keys
 #define PREF_PATH @"/var/mobile/Library/Preferences/com.custom.idfvspoofer.plist"
@@ -265,6 +266,29 @@ static OSStatus hook_SecItemCopyMatching(CFDictionaryRef query, CFTypeRef *resul
         NSLog(@"[IDFVSpoofer] BLOCKED write: %@", key);
         return;
     }
+    %orig;
+}
+
+%end
+
+// ==================== HOOK Keychain Wrapper (App's own wrapper class) ====================
+%hook KeychainItemWrapper
+
+- (id)objectForKey:(id)key {
+    if (!prefEnabled(kEnableKeychainLog)) {
+        return %orig;
+    }
+    id orig = %orig;
+    NSLog(@"[IDFVSpoofer] KeychainItemWrapper read: %@ = %@", key, orig);
+    return orig;
+}
+
+- (void)setObject:(id)inObject forKey:(id)key {
+    if (!prefEnabled(kEnableKeychainLog)) {
+        %orig;
+        return;
+    }
+    NSLog(@"[IDFVSpoofer] KeychainItemWrapper write: %@ = %@", key, inObject);
     %orig;
 }
 
