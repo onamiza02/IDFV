@@ -1,6 +1,6 @@
 Package: com.custom.idfvspoofer
 Name: IDFVSpoofer
-Version: 5.4.1
+Version: 5.4.2
 Architecture: iphoneos-arm64
 Description: GGPoker Device Ban Bypass - IDFV Spoof, Keychain Clear, NSUserDefaults Hook.
 Maintainer: Custom
