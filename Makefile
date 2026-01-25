@@ -14,6 +14,7 @@ IDFVSpoofer_FRAMEWORKS = UIKit Foundation Security
 
 include $(THEOS_MAKE_PATH)/tweak.mk
 
-# Include Settings bundle
-SUBPROJECTS += idfvspooferprefs
-include $(THEOS_MAKE_PATH)/aggregate.mk
+# Settings bundle disabled for now (GitHub Actions doesn't have Preferences.framework)
+# Build locally with: make package SUBPROJECTS=idfvspooferprefs
+# SUBPROJECTS += idfvspooferprefs
+# include $(THEOS_MAKE_PATH)/aggregate.mk
