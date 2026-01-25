@@ -23,9 +23,10 @@ jobs:
     - name: Download iOS SDK with Private Frameworks
       run: |
         cd $THEOS/sdks
-        curl -LO https://github.com/theos/sdks/releases/download/master/iPhoneOS14.5.sdk.tar.xz
+        curl -LO https://github.com/theos/sdks/releases/download/master-146e41f/iPhoneOS14.5.sdk.tar.xz
         tar -xf iPhoneOS14.5.sdk.tar.xz
         rm iPhoneOS14.5.sdk.tar.xz
+        ls -la
 
     - name: Build Package
       run: |
