@@ -20,47 +20,36 @@ jobs:
     - name: Setup Theos
       uses: Randomblock1/theos-action@v1
 
-    - name: Setup Preferences.framework
-      run: |
-        # Download SDK with private frameworks from theos/sdks
-        cd $THEOS/sdks
-        
-        # Check what's available
-        echo "Current SDKs:"
-        ls -la
-        
-        # Check if Preferences.framework exists in any SDK
-        find . -name "Preferences.framework" -type d 2>/dev/null | head -5
-        
-        # Check PrivateFrameworks in latest SDK
-        SDK_PATH=$(find . -maxdepth 1 -type d -name "iPhoneOS*.sdk" | sort -V | tail -1)
-        echo "Using SDK: $SDK_PATH"
-        
-        # List what's in PrivateFrameworks
-        echo "Private frameworks in SDK:"
-        ls "$SDK_PATH/System/Library/PrivateFrameworks/" 2>/dev/null | head -20 || echo "No PrivateFrameworks dir"
-        
-    - name: Download Full SDK
+    - name: Download Full SDK with Private Frameworks
       run: |
         cd $THEOS/sdks
-        
-        # Remove existing SDK and download one with private frameworks
-        rm -rf iPhoneOS14.5.sdk 2>/dev/null || true
         
         # Clone iOS-SDKs repo (sparse checkout just for iOS 14.5)
         git clone --depth 1 --filter=blob:none --sparse https://github.com/xybp888/iOS-SDKs.git temp-sdks
         cd temp-sdks
         git sparse-checkout set iPhoneOS14.5.sdk
+        
+        # Remove existing SDK with same name and move new one
+        rm -rf ../iPhoneOS14.5.sdk 2>/dev/null || true
         mv iPhoneOS14.5.sdk ../
         cd ..
         rm -rf temp-sdks
         
-        # Verify
-        ls -la iPhoneOS14.5.sdk/System/Library/PrivateFrameworks/ | grep -i pref || echo "Check failed"
+        # Verify Preferences.framework exists
+        ls -la iPhoneOS14.5.sdk/System/Library/PrivateFrameworks/Preferences.framework/
+        
+        # Check what TBD files are in Preferences.framework
+        ls -la iPhoneOS14.5.sdk/System/Library/PrivateFrameworks/Preferences.framework/
 
     - name: Build Package
       run: |
-        make package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless SDKVERSION=14.5
+        # Export SDK path explicitly
+        export SYSROOT=$THEOS/sdks/iPhoneOS14.5.sdk
+        export SDKVERSION=14.5
+        export IPHONE_SDKVERSION=14.5
+        
+        # Build with explicit SDK version
+        make package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless SDKVERSION=14.5 SYSROOT=$THEOS/sdks/iPhoneOS14.5.sdk
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
