@@ -20,42 +20,47 @@ jobs:
     - name: Setup Theos
       uses: Randomblock1/theos-action@v1
 
-    - name: Create Preferences.framework stub
+    - name: Setup Preferences.framework
       run: |
-        # Find the SDK being used
-        SDK_PATH=$(find $THEOS/sdks -maxdepth 1 -type d -name "iPhoneOS*.sdk" | sort -V | tail -1)
+        # Download SDK with private frameworks from theos/sdks
+        cd $THEOS/sdks
+        
+        # Check what's available
+        echo "Current SDKs:"
+        ls -la
+        
+        # Check if Preferences.framework exists in any SDK
+        find . -name "Preferences.framework" -type d 2>/dev/null | head -5
+        
+        # Check PrivateFrameworks in latest SDK
+        SDK_PATH=$(find . -maxdepth 1 -type d -name "iPhoneOS*.sdk" | sort -V | tail -1)
         echo "Using SDK: $SDK_PATH"
         
-        # Create PrivateFrameworks directory if it doesn't exist
-        mkdir -p "$SDK_PATH/System/Library/PrivateFrameworks/Preferences.framework"
+        # List what's in PrivateFrameworks
+        echo "Private frameworks in SDK:"
+        ls "$SDK_PATH/System/Library/PrivateFrameworks/" 2>/dev/null | head -20 || echo "No PrivateFrameworks dir"
         
-        # Create TBD stub for Preferences.framework
-        cat > "$SDK_PATH/System/Library/PrivateFrameworks/Preferences.framework/Preferences.tbd" << 'TBD'
-        --- !tapi-tbd
-        tbd-version:     4
-        targets:         [ arm64-ios, arm64e-ios ]
-        install-name:    '/System/Library/PrivateFrameworks/Preferences.framework/Preferences'
-        current-version: 1
-        compatibility-version: 1
-        exports:
-          - targets:     [ arm64-ios, arm64e-ios ]
-            objc-classes:
-              - PSListController
-              - PSSpecifier
-              - PSTableCell
-              - PSViewController
-              - PSListItemsController
-              - PSSwitchTableCell
-              - PSEditableTableCell
-        ...
-        TBD
+    - name: Download Full SDK
+      run: |
+        cd $THEOS/sdks
         
-        echo "Created Preferences.framework stub at:"
-        ls -la "$SDK_PATH/System/Library/PrivateFrameworks/Preferences.framework/"
+        # Remove existing SDK and download one with private frameworks
+        rm -rf iPhoneOS14.5.sdk 2>/dev/null || true
+        
+        # Clone iOS-SDKs repo (sparse checkout just for iOS 14.5)
+        git clone --depth 1 --filter=blob:none --sparse https://github.com/xybp888/iOS-SDKs.git temp-sdks
+        cd temp-sdks
+        git sparse-checkout set iPhoneOS14.5.sdk
+        mv iPhoneOS14.5.sdk ../
+        cd ..
+        rm -rf temp-sdks
+        
+        # Verify
+        ls -la iPhoneOS14.5.sdk/System/Library/PrivateFrameworks/ | grep -i pref || echo "Check failed"
 
     - name: Build Package
       run: |
-        make package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless
+        make package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless SDKVERSION=14.5
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
