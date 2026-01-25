@@ -4,13 +4,14 @@
 <dict>
 	<key>items</key>
 	<array>
+		<!-- Header -->
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>Main Hooks</string>
+			<string>Device ID Spoofing</string>
 			<key>footerText</key>
-			<string>IDFV is the main device identifier.</string>
+			<string>Spoof device identifiers to bypass device ban.</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -22,9 +23,19 @@
 			<key>key</key>
 			<string>EnableIDFV</string>
 			<key>label</key>
-			<string>IDFV Hook</string>
-			<key>PostNotification</key>
-			<string>com.custom.idfvspoofer/prefschanged</string>
+			<string>IDFV Spoofing</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>default</key>
+			<true/>
+			<key>defaults</key>
+			<string>com.custom.idfvspoofer</string>
+			<key>key</key>
+			<string>EnableIDFA</string>
+			<key>label</key>
+			<string>IDFA Spoofing</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -37,16 +48,62 @@
 			<string>EnableNSUserDefaults</string>
 			<key>label</key>
 			<string>NSUserDefaults Hook</string>
-			<key>PostNotification</key>
-			<string>com.custom.idfvspoofer/prefschanged</string>
 		</dict>
+
+		<!-- Jailbreak Bypass Section -->
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>Keychain</string>
+			<string>Jailbreak Detection Bypass</string>
 			<key>footerText</key>
-			<string>Clears keychain on FIRST launch only. Use Reset button to clear again.</string>
+			<string>Hide jailbreak from GGPoker/AppGuard detection.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>default</key>
+			<true/>
+			<key>defaults</key>
+			<string>com.custom.idfvspoofer</string>
+			<key>key</key>
+			<string>EnableJailbreakBypass</string>
+			<key>label</key>
+			<string>Jailbreak Bypass</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>default</key>
+			<true/>
+			<key>defaults</key>
+			<string>com.custom.idfvspoofer</string>
+			<key>key</key>
+			<string>EnableFileSystemBypass</string>
+			<key>label</key>
+			<string>File System Check Bypass</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>default</key>
+			<true/>
+			<key>defaults</key>
+			<string>com.custom.idfvspoofer</string>
+			<key>key</key>
+			<string>EnableAntiHookBypass</string>
+			<key>label</key>
+			<string>Anti-Hooking Bypass</string>
+		</dict>
+
+		<!-- Data Clearing Section -->
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Data Clearing</string>
+			<key>footerText</key>
+			<string>Clear stored device data from GGPoker.</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -58,32 +115,56 @@
 			<key>key</key>
 			<string>EnableKeychainClear</string>
 			<key>label</key>
-			<string>Keychain Clear</string>
-			<key>PostNotification</key>
-			<string>com.custom.idfvspoofer/prefschanged</string>
+			<string>Keychain Clear (First Launch)</string>
 		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSSwitchCell</string>
 			<key>default</key>
-			<false/>
+			<true/>
 			<key>defaults</key>
 			<string>com.custom.idfvspoofer</string>
 			<key>key</key>
-			<string>EnableKeychainLog</string>
+			<string>EnableAppsFlyerReset</string>
 			<key>label</key>
-			<string>Keychain Debug Log</string>
-			<key>PostNotification</key>
-			<string>com.custom.idfvspoofer/prefschanged</string>
+			<string>AppsFlyer Data Reset</string>
+		</dict>
+
+		<!-- Reset Buttons -->
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Actions</string>
+			<key>footerText</key>
+			<string>Use these to force reset and generate new IDs.</string>
 		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSButtonCell</string>
 			<key>label</key>
-			<string>Reset Keychain Flag</string>
+			<string>Reset All Data &amp; Generate New IDs</string>
 			<key>action</key>
-			<string>resetKeychainFlag</string>
+			<string>resetAllData</string>
 		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSButtonCell</string>
+			<key>label</key>
+			<string>Clear Keychain Again</string>
+			<key>action</key>
+			<string>clearKeychain</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSButtonCell</string>
+			<key>label</key>
+			<string>Reset AppsFlyer Data Again</string>
+			<key>action</key>
+			<string>resetAppsFlyer</string>
+		</dict>
+
+		<!-- UI Section -->
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
@@ -100,10 +181,10 @@
 			<key>key</key>
 			<string>EnablePopup</string>
 			<key>label</key>
-			<string>Show Popup</string>
-			<key>PostNotification</key>
-			<string>com.custom.idfvspoofer/prefschanged</string>
+			<string>Show Status Popup</string>
 		</dict>
+
+		<!-- About Section -->
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
@@ -114,13 +195,19 @@
 			<key>cell</key>
 			<string>PSStaticTextCell</string>
 			<key>label</key>
-			<string>IDFVSpoofer v5.3</string>
+			<string>IDFVSpoofer v6.0.0</string>
 		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSStaticTextCell</string>
 			<key>label</key>
-			<string>Respring after changes!</string>
+			<string>GGPoker Complete Ban Bypass</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSStaticTextCell</string>
+			<key>label</key>
+			<string>Restart GGPoker after changes!</string>
 		</dict>
 	</array>
 	<key>title</key>

@@ -23,38 +23,29 @@ jobs:
     - name: Download Full SDK with Private Frameworks
       run: |
         cd $THEOS/sdks
-        
+
         # Clone iOS-SDKs repo (sparse checkout just for iOS 14.5)
         git clone --depth 1 --filter=blob:none --sparse https://github.com/xybp888/iOS-SDKs.git temp-sdks
         cd temp-sdks
         git sparse-checkout set iPhoneOS14.5.sdk
-        
+
         # Remove existing SDK with same name and move new one
         rm -rf ../iPhoneOS14.5.sdk 2>/dev/null || true
         mv iPhoneOS14.5.sdk ../
         cd ..
         rm -rf temp-sdks
-        
+
         # Verify Preferences.framework exists
-        ls -la iPhoneOS14.5.sdk/System/Library/PrivateFrameworks/Preferences.framework/
-        
-        # Check what TBD files are in Preferences.framework
-        ls -la iPhoneOS14.5.sdk/System/Library/PrivateFrameworks/Preferences.framework/
+        ls -la iPhoneOS14.5.sdk/System/Library/PrivateFrameworks/Preferences.framework/ || echo "Preferences.framework not found"
 
     - name: Build Package
       run: |
-        # Export SDK path explicitly
-        export SYSROOT=$THEOS/sdks/iPhoneOS14.5.sdk
-        export SDKVERSION=14.5
-        export IPHONE_SDKVERSION=14.5
-        
-        # Build with explicit SDK version
-        make package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless SDKVERSION=14.5 SYSROOT=$THEOS/sdks/iPhoneOS14.5.sdk
+        make package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless SDKVERSION=14.5
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: IDFVSpoofer-rootless
+        name: IDFVSpoofer-v6-rootless
         path: packages/*.deb
 
     - name: Create Release
