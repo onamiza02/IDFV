@@ -1,6 +1,6 @@
 Package: com.custom.idfvspoofer
 Name: IDFVSpoofer
-Version: 5.6.0
+Version: 5.6.1
 Architecture: iphoneos-arm64
 Description: GGPoker Ban Bypass with Settings UI - Toggle each feature ON/OFF in Settings app
 Maintainer: Custom
