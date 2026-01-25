@@ -24,16 +24,18 @@ jobs:
       run: |
         cd $THEOS/sdks
 
-        # Clone iOS-SDKs repo (sparse checkout just for iOS 14.5)
-        git clone --depth 1 --filter=blob:none --sparse https://github.com/xybp888/iOS-SDKs.git temp-sdks
-        cd temp-sdks
-        git sparse-checkout set iPhoneOS14.5.sdk
+        # Download pre-packaged iOS 14.5 SDK with all private frameworks
+        curl -sL https://github.com/theos/sdks/releases/download/master/iPhoneOS14.5.sdk.tar.xz -o sdk.tar.xz
+        tar -xJf sdk.tar.xz
+        rm sdk.tar.xz
 
-        # Remove existing SDK with same name and move new one
-        rm -rf ../iPhoneOS14.5.sdk 2>/dev/null || true
-        mv iPhoneOS14.5.sdk ../
-        cd ..
-        rm -rf temp-sdks
+        # Check if Preferences.framework exists, if not download from alternate source
+        if [ ! -d "iPhoneOS14.5.sdk/System/Library/PrivateFrameworks/Preferences.framework" ]; then
+          echo "Downloading Preferences.framework from alternate source..."
+          mkdir -p iPhoneOS14.5.sdk/System/Library/PrivateFrameworks/Preferences.framework
+          curl -sL "https://raw.githubusercontent.com/theos/sdks/master/iPhoneOS14.5.sdk/System/Library/PrivateFrameworks/Preferences.framework/Preferences.tbd" \
+            -o iPhoneOS14.5.sdk/System/Library/PrivateFrameworks/Preferences.framework/Preferences.tbd
+        fi
 
         # Verify Preferences.framework exists
         ls -la iPhoneOS14.5.sdk/System/Library/PrivateFrameworks/Preferences.framework/ || echo "Preferences.framework not found"
