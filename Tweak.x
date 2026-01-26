@@ -1246,6 +1246,9 @@ static BOOL isHiddenDylib(const char *path) {
 
         g_initialized = YES;
 
+        // CRITICAL: Initialize Logos hooks!
+        %init;
+
         // Show popup if enabled - FIXED: Better timing and nil checks
         if (isEnabled(@"EnablePopup")) {
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
