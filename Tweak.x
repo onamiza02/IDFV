@@ -1266,27 +1266,7 @@ static BOOL isHiddenDylib(const char *path) {
         initJailbreakPaths();
         initJailbreakSchemes();
         initHiddenDylibs();
-        buildHiddenImageIndices();
-
-        // Clear keychain on first launch if enabled
-        if (isEnabled(@"EnableKeychainClear")) {
-            NSString *clearedKey = @"_idfvspoofer_keychain_cleared_v6";
-            if (![[NSUserDefaults standardUserDefaults] boolForKey:clearedKey]) {
-                clearGGPokerKeychain();
-                [[NSUserDefaults standardUserDefaults] setBool:YES forKey:clearedKey];
-                [[NSUserDefaults standardUserDefaults] synchronize];
-            }
-        }
-
-        // Reset AppsFlyer data if enabled
-        if (isEnabled(@"EnableAppsFlyerReset")) {
-            NSString *resetKey = @"_idfvspoofer_appsflyer_reset_v6";
-            if (![[NSUserDefaults standardUserDefaults] boolForKey:resetKey]) {
-                resetAppsFlyerData();
-                [[NSUserDefaults standardUserDefaults] setBool:YES forKey:resetKey];
-                [[NSUserDefaults standardUserDefaults] synchronize];
-            }
-        }
+        // NOTE: buildHiddenImageIndices() removed - called lazily by dyld hooks
 
         g_initialized = YES;
 
@@ -1301,6 +1281,29 @@ static BOOL isHiddenDylib(const char *path) {
 
         // CRITICAL: Initialize Logos hooks!
         %init;
+
+        // Delay keychain/AppsFlyer operations to avoid early crashes
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+            // Clear keychain on first launch if enabled
+            if (isEnabled(@"EnableKeychainClear")) {
+                NSString *clearedKey = @"_idfvspoofer_keychain_cleared_v6";
+                if (![[NSUserDefaults standardUserDefaults] boolForKey:clearedKey]) {
+                    clearGGPokerKeychain();
+                    [[NSUserDefaults standardUserDefaults] setBool:YES forKey:clearedKey];
+                    [[NSUserDefaults standardUserDefaults] synchronize];
+                }
+            }
+
+            // Reset AppsFlyer data if enabled
+            if (isEnabled(@"EnableAppsFlyerReset")) {
+                NSString *resetKey = @"_idfvspoofer_appsflyer_reset_v6";
+                if (![[NSUserDefaults standardUserDefaults] boolForKey:resetKey]) {
+                    resetAppsFlyerData();
+                    [[NSUserDefaults standardUserDefaults] setBool:YES forKey:resetKey];
+                    [[NSUserDefaults standardUserDefaults] synchronize];
+                }
+            }
+        });
 
         // Show popup if enabled - FIXED: Better timing and nil checks
         if (isEnabled(@"EnablePopup")) {
