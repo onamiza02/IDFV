@@ -23,17 +23,19 @@
 #import <Security/Security.h>
 #import <AdSupport/AdSupport.h>
 #import <dlfcn.h>
+#import <dirent.h>
 #import <sys/stat.h>
 #import <sys/sysctl.h>
 #import <sys/mount.h>
 #import <sys/param.h>
+#import <sys/types.h>
 #import <mach-o/dyld.h>
 #import <objc/runtime.h>
 #import <spawn.h>
 
-// For ptrace
-#import <sys/types.h>
+// ptrace declaration (not in public iOS SDK)
 #define PT_DENY_ATTACH 31
+extern long ptrace(int request, pid_t pid, caddr_t addr, int data);
 
 // ==================== SETTINGS ====================
 // Support both rootless and rootful paths
@@ -952,23 +954,7 @@ static BOOL isHiddenDylib(const char *path) {
     return %orig;
 }
 
-// Hook system() - prevent shell commands
-%hookf(int, system, const char *command) {
-    if (isEnabled(@"EnableJailbreakBypass")) {
-        // Block all system() calls - non-jailbroken devices return -1
-        return -1;
-    }
-    return %orig;
-}
-
-// Hook popen() - prevent pipe commands
-%hookf(FILE *, popen, const char *command, const char *type) {
-    if (isEnabled(@"EnableJailbreakBypass")) {
-        // Block all popen() calls
-        return NULL;
-    }
-    return %orig;
-}
+// NOTE: system() and popen() hooks removed - unavailable on iOS
 
 // Hook _dyld_image_count to reduce image count
 %hookf(uint32_t, _dyld_image_count) {
