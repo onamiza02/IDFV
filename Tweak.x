@@ -244,24 +244,40 @@ static void initHiddenDylibs() {
     });
 }
 
-// Build hidden image indices for dyld hooks - FIXED with proper thread safety
+// Original dyld function pointers (to avoid recursion when hooks are active)
+static uint32_t (*orig_dyld_image_count)(void) = NULL;
+static const char *(*orig_dyld_get_image_name)(uint32_t) = NULL;
+
+// Build hidden image indices for dyld hooks - FIXED to avoid recursion
 static void buildHiddenImageIndices() {
     dispatch_once(&g_indicesOnce, ^{
+        // Get original function pointers via dlsym to avoid our hooks
+        if (!orig_dyld_image_count) {
+            orig_dyld_image_count = (uint32_t (*)(void))dlsym(RTLD_DEFAULT, "_dyld_image_count");
+        }
+        if (!orig_dyld_get_image_name) {
+            orig_dyld_get_image_name = (const char *(*)(uint32_t))dlsym(RTLD_DEFAULT, "_dyld_get_image_name");
+        }
+
         pthread_mutex_lock(&g_dyldMutex);
 
         g_hiddenImageIndices = [[NSMutableIndexSet alloc] init];
-        g_originalImageCount = _dyld_image_count();
 
-        initHiddenDylibs();
+        // Use original functions to avoid recursion!
+        if (orig_dyld_image_count && orig_dyld_get_image_name) {
+            g_originalImageCount = orig_dyld_image_count();
 
-        for (uint32_t i = 0; i < g_originalImageCount; i++) {
-            const char *imageName = _dyld_get_image_name(i);
-            if (imageName) {
-                NSString *name = [NSString stringWithUTF8String:imageName];
-                for (NSString *hidden in g_hiddenDylibs) {
-                    if ([name containsString:hidden]) {
-                        [g_hiddenImageIndices addIndex:i];
-                        break;
+            initHiddenDylibs();
+
+            for (uint32_t i = 0; i < g_originalImageCount; i++) {
+                const char *imageName = orig_dyld_get_image_name(i);
+                if (imageName) {
+                    NSString *name = [NSString stringWithUTF8String:imageName];
+                    for (NSString *hidden in g_hiddenDylibs) {
+                        if ([name containsString:hidden]) {
+                            [g_hiddenImageIndices addIndex:i];
+                            break;
+                        }
                     }
                 }
             }
@@ -1245,6 +1261,15 @@ static BOOL isHiddenDylib(const char *path) {
         }
 
         g_initialized = YES;
+
+        // CRITICAL: Cache original dyld function pointers BEFORE hooks are registered!
+        // After %init, dlsym may return hooked versions
+        if (!orig_dyld_image_count) {
+            orig_dyld_image_count = (uint32_t (*)(void))dlsym(RTLD_DEFAULT, "_dyld_image_count");
+        }
+        if (!orig_dyld_get_image_name) {
+            orig_dyld_get_image_name = (const char *(*)(uint32_t))dlsym(RTLD_DEFAULT, "_dyld_get_image_name");
+        }
 
         // CRITICAL: Initialize Logos hooks!
         %init;
