@@ -903,7 +903,7 @@ static BOOL isHiddenDylib(const char *path) {
 // Hook open() to block access to jailbreak files
 // FIXED: Handle O_TMPFILE
 %hookf(int, open, const char *path, int oflag, ...) {
-    if (!g_initialized) return %orig;
+    if (!g_initialized) return %orig(path, oflag);
     if (isEnabled(@"EnableFileSystemBypass") && path) {
         NSString *pathStr = [NSString stringWithUTF8String:path];
         if (isJailbreakPath(pathStr)) {
