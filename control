@@ -1,9 +1,9 @@
 Package: com.custom.idfvspoofer
 Name: IDFVSpoofer
-Version: 5.5.1
+Version: 6.2.0
 Architecture: iphoneos-arm64
-Description: GGPoker Ban Bypass - Toggle each feature via plist (Filza editable)
+Description: GGPoker Complete Device Ban Bypass - IDFV/IDFA Spoof, Jailbreak Bypass, Anti-Hook Bypass, Keychain Clear, AppGuard Bypass
 Maintainer: Custom
 Author: Custom
 Section: Tweaks
-Depends: ellekit | mobilesubstrate | com.ex.substitute
+Depends: firmware (>= 14.0), ellekit | mobilesubstrate | com.ex.substitute, preferenceloader
