@@ -821,6 +821,7 @@ static BOOL isHiddenDylib(const char *path) {
 
 // Hook stat() to hide jailbreak files
 %hookf(int, stat, const char *path, struct stat *buf) {
+    if (!g_initialized) return %orig;
     if (isEnabled(@"EnableFileSystemBypass") && path) {
         NSString *pathStr = [NSString stringWithUTF8String:path];
         if (isJailbreakPath(pathStr)) {
@@ -833,6 +834,7 @@ static BOOL isHiddenDylib(const char *path) {
 
 // Hook lstat() to hide jailbreak files
 %hookf(int, lstat, const char *path, struct stat *buf) {
+    if (!g_initialized) return %orig;
     if (isEnabled(@"EnableFileSystemBypass") && path) {
         NSString *pathStr = [NSString stringWithUTF8String:path];
         if (isJailbreakPath(pathStr)) {
@@ -848,6 +850,7 @@ static BOOL isHiddenDylib(const char *path) {
 
 // Hook access() to hide jailbreak files
 %hookf(int, access, const char *path, int mode) {
+    if (!g_initialized) return %orig;
     if (isEnabled(@"EnableFileSystemBypass") && path) {
         NSString *pathStr = [NSString stringWithUTF8String:path];
         if (isJailbreakPath(pathStr)) {
@@ -860,6 +863,7 @@ static BOOL isHiddenDylib(const char *path) {
 
 // NEW: Hook faccessat() - modern access check
 %hookf(int, faccessat, int dirfd, const char *path, int mode, int flags) {
+    if (!g_initialized) return %orig;
     if (isEnabled(@"EnableFileSystemBypass") && path) {
         NSString *pathStr = [NSString stringWithUTF8String:path];
         if (isJailbreakPath(pathStr)) {
@@ -872,6 +876,7 @@ static BOOL isHiddenDylib(const char *path) {
 
 // NEW: Hook fstatat() - modern stat variant
 %hookf(int, fstatat, int dirfd, const char *path, struct stat *buf, int flags) {
+    if (!g_initialized) return %orig;
     if (isEnabled(@"EnableFileSystemBypass") && path) {
         NSString *pathStr = [NSString stringWithUTF8String:path];
         if (isJailbreakPath(pathStr)) {
@@ -884,6 +889,7 @@ static BOOL isHiddenDylib(const char *path) {
 
 // Hook fopen() to block access to jailbreak files
 %hookf(FILE *, fopen, const char *path, const char *mode) {
+    if (!g_initialized) return %orig;
     if (isEnabled(@"EnableFileSystemBypass") && path) {
         NSString *pathStr = [NSString stringWithUTF8String:path];
         if (isJailbreakPath(pathStr)) {
@@ -897,6 +903,7 @@ static BOOL isHiddenDylib(const char *path) {
 // Hook open() to block access to jailbreak files
 // FIXED: Handle O_TMPFILE
 %hookf(int, open, const char *path, int oflag, ...) {
+    if (!g_initialized) return %orig;
     if (isEnabled(@"EnableFileSystemBypass") && path) {
         NSString *pathStr = [NSString stringWithUTF8String:path];
         if (isJailbreakPath(pathStr)) {
@@ -919,6 +926,7 @@ static BOOL isHiddenDylib(const char *path) {
 
 // Hook opendir() to block directory access
 %hookf(DIR *, opendir, const char *path) {
+    if (!g_initialized) return %orig;
     if (isEnabled(@"EnableFileSystemBypass") && path) {
         NSString *pathStr = [NSString stringWithUTF8String:path];
         if (isJailbreakPath(pathStr)) {
@@ -931,6 +939,7 @@ static BOOL isHiddenDylib(const char *path) {
 
 // Hook readlink() to hide symlinks
 %hookf(ssize_t, readlink, const char *path, char *buf, size_t bufsize) {
+    if (!g_initialized) return %orig;
     if (isEnabled(@"EnableFileSystemBypass") && path) {
         NSString *pathStr = [NSString stringWithUTF8String:path];
         if (isJailbreakPath(pathStr)) {
@@ -943,6 +952,7 @@ static BOOL isHiddenDylib(const char *path) {
 
 // NEW: Hook readlinkat() - modern readlink
 %hookf(ssize_t, readlinkat, int dirfd, const char *path, char *buf, size_t bufsize) {
+    if (!g_initialized) return %orig;
     if (isEnabled(@"EnableFileSystemBypass") && path) {
         NSString *pathStr = [NSString stringWithUTF8String:path];
         if (isJailbreakPath(pathStr)) {
@@ -955,6 +965,7 @@ static BOOL isHiddenDylib(const char *path) {
 
 // Hook realpath() to hide jailbreak paths
 %hookf(char *, realpath, const char *path, char *resolved_path) {
+    if (!g_initialized) return %orig;
     if (isEnabled(@"EnableFileSystemBypass") && path) {
         NSString *pathStr = [NSString stringWithUTF8String:path];
         if (isJailbreakPath(pathStr)) {
@@ -967,6 +978,7 @@ static BOOL isHiddenDylib(const char *path) {
 
 // Hook statfs() to hide filesystem info
 %hookf(int, statfs, const char *path, struct statfs *buf) {
+    if (!g_initialized) return %orig;
     if (isEnabled(@"EnableFileSystemBypass") && path) {
         NSString *pathStr = [NSString stringWithUTF8String:path];
         if (isJailbreakPath(pathStr)) {
@@ -979,12 +991,14 @@ static BOOL isHiddenDylib(const char *path) {
 
 // Hook fstatfs()
 %hookf(int, fstatfs, int fd, struct statfs *buf) {
+    if (!g_initialized) return %orig;
     return %orig;
 }
 
 // Hook dlopen() to prevent loading detection
 // FIXED: Don't block our own libs
 %hookf(void *, dlopen, const char *path, int mode) {
+    if (!g_initialized) return %orig;
     if (isEnabled(@"EnableAntiHookBypass") && path) {
         NSString *pathStr = [NSString stringWithUTF8String:path];
 
@@ -1002,6 +1016,7 @@ static BOOL isHiddenDylib(const char *path) {
 
 // Hook dlsym() to hide substrate symbols
 %hookf(void *, dlsym, void *handle, const char *symbol) {
+    if (!g_initialized) return %orig;
     if (isEnabled(@"EnableAntiHookBypass") && symbol) {
         NSString *sym = [NSString stringWithUTF8String:symbol];
         if ([sym containsString:@"MSHookFunction"] ||
@@ -1023,6 +1038,7 @@ static BOOL isHiddenDylib(const char *path) {
 
 // Hook dladdr() to hide module info
 %hookf(int, dladdr, const void *addr, Dl_info *info) {
+    if (!g_initialized) return %orig;
     int result = %orig;
     if (isEnabled(@"EnableAntiHookBypass") && result && info && info->dli_fname) {
         if (isHiddenDylib(info->dli_fname)) {
@@ -1034,6 +1050,7 @@ static BOOL isHiddenDylib(const char *path) {
 
 // Hook getenv() to hide environment variables
 %hookf(char *, getenv, const char *name) {
+    if (!g_initialized) return %orig;
     if (isEnabled(@"EnableJailbreakBypass") && name) {
         NSString *envName = [NSString stringWithUTF8String:name];
         if ([envName isEqualToString:@"DYLD_INSERT_LIBRARIES"] ||
@@ -1050,6 +1067,7 @@ static BOOL isHiddenDylib(const char *path) {
 // Hook sysctl() to hide debugger attachment (anti-debugging bypass)
 // FIXED: Added more checks
 %hookf(int, sysctl, int *name, u_int namelen, void *oldp, size_t *oldlenp, void *newp, size_t newlen) {
+    if (!g_initialized) return %orig;
     if (isEnabled(@"EnableAntiHookBypass") && namelen >= 2) {
         // CTL_KERN, KERN_PROC, KERN_PROC_PID check
         if (name[0] == CTL_KERN && name[1] == KERN_PROC) {
@@ -1069,6 +1087,7 @@ static BOOL isHiddenDylib(const char *path) {
 
 // Hook sysctlbyname() for additional sysctl checks
 %hookf(int, sysctlbyname, const char *name, void *oldp, size_t *oldlenp, void *newp, size_t newlen) {
+    if (!g_initialized) return %orig;
     if (isEnabled(@"EnableAntiHookBypass") && name) {
         // Block some jailbreak-revealing sysctl names
         NSString *nameStr = [NSString stringWithUTF8String:name];
@@ -1085,6 +1104,7 @@ static BOOL isHiddenDylib(const char *path) {
 
 // Hook ptrace() to prevent anti-debugging
 %hookf(long, ptrace, int request, pid_t pid, void *addr, int data) {
+    if (!g_initialized) return %orig;
     if (isEnabled(@"EnableAntiHookBypass")) {
         if (request == PT_DENY_ATTACH) {
             // Block anti-debugging attempt
@@ -1096,6 +1116,7 @@ static BOOL isHiddenDylib(const char *path) {
 
 // Hook fork() - some apps try to fork to detect debugging
 %hookf(pid_t, fork) {
+    if (!g_initialized) return %orig;
     if (isEnabled(@"EnableJailbreakBypass")) {
         // Return -1 to indicate fork is not allowed (like on non-jailbroken device)
         errno = ENOSYS;
@@ -1106,6 +1127,7 @@ static BOOL isHiddenDylib(const char *path) {
 
 // Hook vfork()
 %hookf(pid_t, vfork) {
+    if (!g_initialized) return %orig;
     if (isEnabled(@"EnableJailbreakBypass")) {
         errno = ENOSYS;
         return -1;
@@ -1115,6 +1137,7 @@ static BOOL isHiddenDylib(const char *path) {
 
 // Hook posix_spawn() - prevent spawning processes
 %hookf(int, posix_spawn, pid_t *pid, const char *path, const posix_spawn_file_actions_t *file_actions, const posix_spawnattr_t *attrp, char *const argv[], char *const envp[]) {
+    if (!g_initialized) return %orig;
     if (isEnabled(@"EnableJailbreakBypass") && path) {
         NSString *pathStr = [NSString stringWithUTF8String:path];
         if (isJailbreakPath(pathStr) ||
@@ -1132,6 +1155,7 @@ static BOOL isHiddenDylib(const char *path) {
 // Hook _dyld_image_count to reduce image count
 // FIXED: Thread-safe implementation
 %hookf(uint32_t, _dyld_image_count) {
+    if (!g_initialized) return %orig;
     if (!isEnabled(@"EnableJailbreakBypass")) {
         return %orig;
     }
@@ -1149,6 +1173,7 @@ static BOOL isHiddenDylib(const char *path) {
 // Hook _dyld_get_image_name to hide injected dylibs
 // FIXED: Correct algorithm
 %hookf(const char *, _dyld_get_image_name, uint32_t image_index) {
+    if (!g_initialized) return %orig;
     if (!isEnabled(@"EnableJailbreakBypass")) {
         return %orig;
     }
@@ -1169,6 +1194,7 @@ static BOOL isHiddenDylib(const char *path) {
 // Hook _dyld_get_image_header similarly
 // FIXED: Correct algorithm
 %hookf(const struct mach_header *, _dyld_get_image_header, uint32_t image_index) {
+    if (!g_initialized) return %orig;
     if (!isEnabled(@"EnableJailbreakBypass")) {
         return %orig;
     }
@@ -1189,6 +1215,7 @@ static BOOL isHiddenDylib(const char *path) {
 // Hook _dyld_get_image_vmaddr_slide similarly
 // FIXED: Correct algorithm
 %hookf(intptr_t, _dyld_get_image_vmaddr_slide, uint32_t image_index) {
+    if (!g_initialized) return %orig;
     if (!isEnabled(@"EnableJailbreakBypass")) {
         return %orig;
     }
@@ -1208,6 +1235,7 @@ static BOOL isHiddenDylib(const char *path) {
 
 // Hook getppid() - Parent process ID check (some detectors check if parent is launchd)
 %hookf(pid_t, getppid) {
+    if (!g_initialized) return %orig;
     if (isEnabled(@"EnableJailbreakBypass")) {
         // Return 1 (launchd) - normal for iOS apps
         return 1;
