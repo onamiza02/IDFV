@@ -1,5 +1,5 @@
 /*
- * IDFVSpoofer v6.0.0 - GGPoker Complete Device Ban Bypass
+ * IDFVSpoofer v6.1.0 - GGPoker Complete Device Ban Bypass
  *
  * Features:
  * 1. IDFV Spoofing (identifierForVendor)
@@ -12,24 +12,43 @@
  * 8. NSUserDefaults Spoofing
  * 9. File System Check Bypass
  * 10. AppsFlyer ID Reset
+ * 11. Anti-Debugging Bypass (ptrace)
+ * 12. Environment Variable Hiding
  *
- * Based on research from:
- * - Shadow jailbreak bypass (github.com/jjolano/shadow)
- * - ios10_device_hook
- * - AppGuard SDK analysis
+ * Supports: Rootless (Dopamine/Palera1n) + Rootful
  */
 
 #import <UIKit/UIKit.h>
 #import <Foundation/Foundation.h>
 #import <Security/Security.h>
+#import <AdSupport/AdSupport.h>
 #import <dlfcn.h>
 #import <sys/stat.h>
 #import <sys/sysctl.h>
+#import <sys/mount.h>
+#import <sys/param.h>
 #import <mach-o/dyld.h>
 #import <objc/runtime.h>
+#import <spawn.h>
+
+// For ptrace
+#import <sys/types.h>
+#define PT_DENY_ATTACH 31
 
 // ==================== SETTINGS ====================
-#define PREF_PATH @"/var/mobile/Library/Preferences/com.custom.idfvspoofer.plist"
+// Support both rootless and rootful paths
+static NSString *getPreferencesPath() {
+    // Rootless path (Dopamine/Palera1n)
+    NSString *rootlessPath = @"/var/jb/var/mobile/Library/Preferences/com.custom.idfvspoofer.plist";
+    // Rootful path
+    NSString *rootfulPath = @"/var/mobile/Library/Preferences/com.custom.idfvspoofer.plist";
+
+    // Check which exists
+    if ([[NSFileManager defaultManager] fileExistsAtPath:rootlessPath]) {
+        return rootlessPath;
+    }
+    return rootfulPath;
+}
 
 static NSUUID *g_spoofedIDFV = nil;
 static NSUUID *g_spoofedIDFA = nil;
@@ -38,6 +57,7 @@ static NSString *g_spoofedIDFAString = nil;
 static NSString *g_spoofedUnityID = nil;
 static NSDictionary *g_settings = nil;
 static BOOL g_keychainCleared = NO;
+static BOOL g_initialized = NO;
 
 // Jailbreak paths to hide
 static NSArray *g_jailbreakPaths = nil;
@@ -47,6 +67,10 @@ static NSArray *g_jailbreakSchemes = nil;
 
 // Dylibs to hide
 static NSArray *g_hiddenDylibs = nil;
+
+// Original dyld image count (before filtering)
+static uint32_t g_originalImageCount = 0;
+static NSMutableIndexSet *g_hiddenImageIndices = nil;
 
 // ==================== INITIALIZATION ====================
 
@@ -97,15 +121,26 @@ static void initJailbreakPaths() {
             @"/jb",
             @"/.installed_unc0ver",
             @"/.bootstrapped_electra",
+            @"/.cydia_no_stash",
 
-            // Rootless paths
+            // Rootless paths (Dopamine/Palera1n)
             @"/var/jb/Library/MobileSubstrate",
             @"/var/jb/usr/lib/libsubstitute.dylib",
             @"/var/jb/usr/lib/libellekit.dylib",
+            @"/var/jb/usr/lib/libhooker.dylib",
+            @"/var/jb/Applications/Cydia.app",
+            @"/var/jb/Applications/Sileo.app",
+            @"/var/jb/bin/bash",
+            @"/var/jb/usr/bin/ssh",
 
             // AppGuard specific checks
             @"/Library/MobileSubstrate/DynamicLibraries/LiveClock.plist",
             @"/Library/MobileSubstrate/DynamicLibraries/Veency.plist",
+
+            // Frida detection
+            @"/usr/sbin/frida-server",
+            @"/usr/bin/frida-server",
+            @"/usr/lib/frida",
         ];
     }
 }
@@ -120,6 +155,7 @@ static void initJailbreakSchemes() {
             @"activator://",
             @"undecimus://",
             @"ssh://",
+            @"apt://",
         ];
     }
 }
@@ -129,6 +165,8 @@ static void initHiddenDylibs() {
         g_hiddenDylibs = @[
             @"MobileSubstrate",
             @"substrate",
+            @"SubstrateLoader",
+            @"SubstrateInserter",
             @"substitute",
             @"ellekit",
             @"libhooker",
@@ -140,13 +178,89 @@ static void initHiddenDylibs() {
             @"Shadow",
             @"Liberty",
             @"xCon",
-            @"AppGuard", // Hide our own hooks from AppGuard
+            @"Flex",
+            @"FLEXing",
+            @"A-Bypass",
+            @"FlyJB",
+            @"Hestia",
+            @"Choicy",
         ];
     }
 }
 
+// Build hidden image indices for dyld hooks
+static void buildHiddenImageIndices() {
+    if (g_hiddenImageIndices) return;
+
+    g_hiddenImageIndices = [[NSMutableIndexSet alloc] init];
+    g_originalImageCount = _dyld_image_count();
+
+    for (uint32_t i = 0; i < g_originalImageCount; i++) {
+        const char *imageName = _dyld_get_image_name(i);
+        if (imageName) {
+            NSString *name = [NSString stringWithUTF8String:imageName];
+            for (NSString *hidden in g_hiddenDylibs) {
+                if ([name containsString:hidden]) {
+                    [g_hiddenImageIndices addIndex:i];
+                    break;
+                }
+            }
+        }
+    }
+}
+
 static void loadSettings() {
-    g_settings = [NSDictionary dictionaryWithContentsOfFile:PREF_PATH];
+    // Try to load from file first
+    NSString *prefsPath = getPreferencesPath();
+    g_settings = [NSDictionary dictionaryWithContentsOfFile:prefsPath];
+
+    // Also check NSUserDefaults (preference bundle writes here)
+    if (!g_settings) {
+        CFPreferencesAppSynchronize(CFSTR("com.custom.idfvspoofer"));
+
+        NSMutableDictionary *prefs = [NSMutableDictionary dictionary];
+
+        CFBooleanRef val;
+        val = (CFBooleanRef)CFPreferencesCopyAppValue(CFSTR("EnableIDFV"), CFSTR("com.custom.idfvspoofer"));
+        prefs[@"EnableIDFV"] = val ? @(CFBooleanGetValue(val)) : @YES;
+        if (val) CFRelease(val);
+
+        val = (CFBooleanRef)CFPreferencesCopyAppValue(CFSTR("EnableIDFA"), CFSTR("com.custom.idfvspoofer"));
+        prefs[@"EnableIDFA"] = val ? @(CFBooleanGetValue(val)) : @YES;
+        if (val) CFRelease(val);
+
+        val = (CFBooleanRef)CFPreferencesCopyAppValue(CFSTR("EnableNSUserDefaults"), CFSTR("com.custom.idfvspoofer"));
+        prefs[@"EnableNSUserDefaults"] = val ? @(CFBooleanGetValue(val)) : @YES;
+        if (val) CFRelease(val);
+
+        val = (CFBooleanRef)CFPreferencesCopyAppValue(CFSTR("EnableKeychainClear"), CFSTR("com.custom.idfvspoofer"));
+        prefs[@"EnableKeychainClear"] = val ? @(CFBooleanGetValue(val)) : @YES;
+        if (val) CFRelease(val);
+
+        val = (CFBooleanRef)CFPreferencesCopyAppValue(CFSTR("EnableJailbreakBypass"), CFSTR("com.custom.idfvspoofer"));
+        prefs[@"EnableJailbreakBypass"] = val ? @(CFBooleanGetValue(val)) : @YES;
+        if (val) CFRelease(val);
+
+        val = (CFBooleanRef)CFPreferencesCopyAppValue(CFSTR("EnableAntiHookBypass"), CFSTR("com.custom.idfvspoofer"));
+        prefs[@"EnableAntiHookBypass"] = val ? @(CFBooleanGetValue(val)) : @YES;
+        if (val) CFRelease(val);
+
+        val = (CFBooleanRef)CFPreferencesCopyAppValue(CFSTR("EnableFileSystemBypass"), CFSTR("com.custom.idfvspoofer"));
+        prefs[@"EnableFileSystemBypass"] = val ? @(CFBooleanGetValue(val)) : @YES;
+        if (val) CFRelease(val);
+
+        val = (CFBooleanRef)CFPreferencesCopyAppValue(CFSTR("EnableAppsFlyerReset"), CFSTR("com.custom.idfvspoofer"));
+        prefs[@"EnableAppsFlyerReset"] = val ? @(CFBooleanGetValue(val)) : @YES;
+        if (val) CFRelease(val);
+
+        val = (CFBooleanRef)CFPreferencesCopyAppValue(CFSTR("EnablePopup"), CFSTR("com.custom.idfvspoofer"));
+        prefs[@"EnablePopup"] = val ? @(CFBooleanGetValue(val)) : @YES;
+        if (val) CFRelease(val);
+
+        g_settings = prefs;
+    }
+
+    // Fallback to defaults if still nil
     if (!g_settings) {
         g_settings = @{
             @"EnableIDFV": @YES,
@@ -159,7 +273,6 @@ static void loadSettings() {
             @"EnableFileSystemBypass": @YES,
             @"EnableAppsFlyerReset": @YES,
         };
-        [g_settings writeToFile:PREF_PATH atomically:YES];
     }
 }
 
@@ -183,14 +296,14 @@ static void initSpoofedValues() {
         }
         g_spoofedIDFVString = [g_spoofedIDFV UUIDString];
 
-        // Generate spoofed IDFA
+        // Generate spoofed IDFA (new each session for privacy)
         g_spoofedIDFA = [NSUUID UUID];
         g_spoofedIDFAString = [g_spoofedIDFA UUIDString];
 
         // Generate Unity-style device ID (same as IDFV for consistency)
         g_spoofedUnityID = g_spoofedIDFVString;
 
-        NSLog(@"[IDFVSpoofer] === v6.0.0 Initialized ===");
+        NSLog(@"[IDFVSpoofer] === v6.1.0 Initialized ===");
         NSLog(@"[IDFVSpoofer] Spoofed IDFV: %@", g_spoofedIDFVString);
         NSLog(@"[IDFVSpoofer] Spoofed IDFA: %@", g_spoofedIDFAString);
     }
@@ -268,7 +381,7 @@ static void resetAppsFlyerData() {
 // ==================== HELPER: CHECK JAILBREAK PATH ====================
 
 static BOOL isJailbreakPath(NSString *path) {
-    if (!path) return NO;
+    if (!path || path.length == 0) return NO;
     initJailbreakPaths();
 
     for (NSString *jbPath in g_jailbreakPaths) {
@@ -278,15 +391,17 @@ static BOOL isJailbreakPath(NSString *path) {
     }
 
     // Check for common patterns
-    if ([path containsString:@"Cydia"] ||
-        [path containsString:@"substrate"] ||
-        [path containsString:@"Substrate"] ||
-        [path containsString:@"substitute"] ||
-        [path containsString:@"ellekit"] ||
-        [path containsString:@"libhooker"] ||
-        [path containsString:@"jailbreak"] ||
-        [path containsString:@"/var/jb/"] ||
-        [path containsString:@"/.jb"]) {
+    NSString *lowercasePath = [path lowercaseString];
+    if ([lowercasePath containsString:@"cydia"] ||
+        [lowercasePath containsString:@"substrate"] ||
+        [lowercasePath containsString:@"substitute"] ||
+        [lowercasePath containsString:@"ellekit"] ||
+        [lowercasePath containsString:@"libhooker"] ||
+        [lowercasePath containsString:@"jailbreak"] ||
+        [lowercasePath containsString:@"/var/jb/"] ||
+        [lowercasePath containsString:@"/.jb"] ||
+        [lowercasePath containsString:@"frida"] ||
+        [lowercasePath containsString:@"cycript"]) {
         return YES;
     }
 
@@ -315,7 +430,6 @@ static BOOL isHiddenDylib(const char *path) {
         return %orig;
     }
     initSpoofedValues();
-    NSLog(@"[IDFVSpoofer] IDFV hooked -> %@", g_spoofedIDFVString);
     return g_spoofedIDFV;
 }
 
@@ -330,7 +444,6 @@ static BOOL isHiddenDylib(const char *path) {
         return %orig;
     }
     initSpoofedValues();
-    NSLog(@"[IDFVSpoofer] IDFA hooked -> %@", g_spoofedIDFAString);
     return g_spoofedIDFA;
 }
 
@@ -347,7 +460,6 @@ static BOOL isHiddenDylib(const char *path) {
 
 - (BOOL)fileExistsAtPath:(NSString *)path {
     if (isEnabled(@"EnableFileSystemBypass") && isJailbreakPath(path)) {
-        NSLog(@"[IDFVSpoofer] Blocked fileExistsAtPath: %@", path);
         return NO;
     }
     return %orig;
@@ -355,7 +467,6 @@ static BOOL isHiddenDylib(const char *path) {
 
 - (BOOL)fileExistsAtPath:(NSString *)path isDirectory:(BOOL *)isDirectory {
     if (isEnabled(@"EnableFileSystemBypass") && isJailbreakPath(path)) {
-        NSLog(@"[IDFVSpoofer] Blocked fileExistsAtPath:isDirectory: %@", path);
         return NO;
     }
     return %orig;
@@ -382,9 +493,24 @@ static BOOL isHiddenDylib(const char *path) {
     return %orig;
 }
 
+- (BOOL)isDeletableFileAtPath:(NSString *)path {
+    if (isEnabled(@"EnableFileSystemBypass") && isJailbreakPath(path)) {
+        return NO;
+    }
+    return %orig;
+}
+
+- (NSDictionary *)attributesOfItemAtPath:(NSString *)path error:(NSError **)error {
+    if (isEnabled(@"EnableFileSystemBypass") && isJailbreakPath(path)) {
+        if (error) *error = [NSError errorWithDomain:NSCocoaErrorDomain code:NSFileNoSuchFileError userInfo:nil];
+        return nil;
+    }
+    return %orig;
+}
+
 - (NSArray *)contentsOfDirectoryAtPath:(NSString *)path error:(NSError **)error {
     NSArray *contents = %orig;
-    if (isEnabled(@"EnableFileSystemBypass")) {
+    if (isEnabled(@"EnableFileSystemBypass") && contents) {
         NSMutableArray *filtered = [NSMutableArray array];
         for (NSString *item in contents) {
             NSString *fullPath = [path stringByAppendingPathComponent:item];
@@ -397,6 +523,13 @@ static BOOL isHiddenDylib(const char *path) {
     return contents;
 }
 
+- (NSDirectoryEnumerator *)enumeratorAtPath:(NSString *)path {
+    if (isEnabled(@"EnableFileSystemBypass") && isJailbreakPath(path)) {
+        return nil;
+    }
+    return %orig;
+}
+
 %end
 
 // ==================== HOOK: UIApplication (URL Scheme Check) ====================
@@ -404,12 +537,27 @@ static BOOL isHiddenDylib(const char *path) {
 %hook UIApplication
 
 - (BOOL)canOpenURL:(NSURL *)url {
-    if (isEnabled(@"EnableJailbreakBypass")) {
+    if (isEnabled(@"EnableJailbreakBypass") && url) {
         initJailbreakSchemes();
         NSString *urlString = [url absoluteString];
-        for (NSString *scheme in g_jailbreakSchemes) {
-            if ([urlString hasPrefix:scheme]) {
-                NSLog(@"[IDFVSpoofer] Blocked canOpenURL: %@", urlString);
+        NSString *scheme = [url scheme];
+
+        for (NSString *jbScheme in g_jailbreakSchemes) {
+            if ([urlString hasPrefix:jbScheme] ||
+                [scheme isEqualToString:[jbScheme stringByReplacingOccurrencesOfString:@"://" withString:@""]]) {
+                return NO;
+            }
+        }
+    }
+    return %orig;
+}
+
+- (BOOL)openURL:(NSURL *)url {
+    if (isEnabled(@"EnableJailbreakBypass") && url) {
+        initJailbreakSchemes();
+        NSString *urlString = [url absoluteString];
+        for (NSString *jbScheme in g_jailbreakSchemes) {
+            if ([urlString hasPrefix:jbScheme]) {
                 return NO;
             }
         }
@@ -424,29 +572,30 @@ static BOOL isHiddenDylib(const char *path) {
 %hook NSUserDefaults
 
 - (id)objectForKey:(NSString *)key {
-    if (!isEnabled(@"EnableNSUserDefaults")) {
+    if (!isEnabled(@"EnableNSUserDefaults") || !key) {
         return %orig;
     }
 
     // Block AppsFlyer device ID retrieval
     if ([key containsString:@"AppsFlyerUserId"] ||
-        [key containsString:@"appsflyer_user_id"]) {
+        [key containsString:@"appsflyer_user_id"] ||
+        [key containsString:@"AF_"]) {
         initSpoofedValues();
-        NSLog(@"[IDFVSpoofer] Spoofed AppsFlyer UID request");
         return g_spoofedIDFVString;
     }
 
     // Block Unity device ID retrieval
     if ([key containsString:@"unity_device_id"] ||
-        [key containsString:@"deviceUniqueIdentifier"]) {
+        [key containsString:@"deviceUniqueIdentifier"] ||
+        [key containsString:@"UnityDeviceId"]) {
         initSpoofedValues();
-        NSLog(@"[IDFVSpoofer] Spoofed Unity device ID request");
         return g_spoofedUnityID;
     }
 
     // Block animation/tracking ID
     if ([key containsString:@"animati0nID"] ||
-        [key containsString:@"gp_id"]) {
+        [key containsString:@"gp_id"] ||
+        [key containsString:@"advertisingId"]) {
         initSpoofedValues();
         return g_spoofedIDFVString;
     }
@@ -455,13 +604,14 @@ static BOOL isHiddenDylib(const char *path) {
 }
 
 - (NSString *)stringForKey:(NSString *)key {
-    if (!isEnabled(@"EnableNSUserDefaults")) {
+    if (!isEnabled(@"EnableNSUserDefaults") || !key) {
         return %orig;
     }
 
     if ([key containsString:@"unity_device_id"] ||
         [key containsString:@"AppsFlyerUserId"] ||
-        [key containsString:@"deviceUniqueIdentifier"]) {
+        [key containsString:@"deviceUniqueIdentifier"] ||
+        [key containsString:@"advertisingId"]) {
         initSpoofedValues();
         return g_spoofedIDFVString;
     }
@@ -478,10 +628,12 @@ static BOOL isHiddenDylib(const char *path) {
 - (NSString *)bundleIdentifier {
     NSString *identifier = %orig;
 
-    // Don't let app know about substrate bundles
-    if ([identifier containsString:@"substrate"] ||
-        [identifier containsString:@"substitute"]) {
-        return nil;
+    if (isEnabled(@"EnableJailbreakBypass") && identifier) {
+        if ([identifier containsString:@"substrate"] ||
+            [identifier containsString:@"substitute"] ||
+            [identifier containsString:@"ellekit"]) {
+            return nil;
+        }
     }
 
     return identifier;
@@ -495,6 +647,22 @@ static BOOL isHiddenDylib(const char *path) {
 
     NSMutableArray *filtered = [NSMutableArray array];
     for (NSBundle *bundle in bundles) {
+        NSString *path = [bundle bundlePath];
+        if (!isJailbreakPath(path)) {
+            [filtered addObject:bundle];
+        }
+    }
+    return filtered;
+}
+
++ (NSArray *)allFrameworks {
+    NSArray *frameworks = %orig;
+    if (!isEnabled(@"EnableJailbreakBypass")) {
+        return frameworks;
+    }
+
+    NSMutableArray *filtered = [NSMutableArray array];
+    for (NSBundle *bundle in frameworks) {
         NSString *path = [bundle bundlePath];
         if (!isJailbreakPath(path)) {
             [filtered addObject:bundle];
@@ -519,10 +687,17 @@ static BOOL isHiddenDylib(const char *path) {
 
     // Remove DYLD_INSERT_LIBRARIES which indicates injection
     [filtered removeObjectForKey:@"DYLD_INSERT_LIBRARIES"];
+    [filtered removeObjectForKey:@"DYLD_LIBRARY_PATH"];
+    [filtered removeObjectForKey:@"DYLD_FRAMEWORK_PATH"];
     [filtered removeObjectForKey:@"_MSSafeMode"];
     [filtered removeObjectForKey:@"_SafeMode"];
+    [filtered removeObjectForKey:@"SUBSTRATE_SAFE_MODE"];
 
     return filtered;
+}
+
+- (BOOL)isOperatingSystemAtLeastVersion:(NSOperatingSystemVersion)version {
+    return %orig;
 }
 
 %end
@@ -534,7 +709,7 @@ static BOOL isHiddenDylib(const char *path) {
     if (isEnabled(@"EnableFileSystemBypass") && path) {
         NSString *pathStr = [NSString stringWithUTF8String:path];
         if (isJailbreakPath(pathStr)) {
-            NSLog(@"[IDFVSpoofer] Blocked stat(): %s", path);
+            errno = ENOENT;
             return -1;
         }
     }
@@ -546,7 +721,7 @@ static BOOL isHiddenDylib(const char *path) {
     if (isEnabled(@"EnableFileSystemBypass") && path) {
         NSString *pathStr = [NSString stringWithUTF8String:path];
         if (isJailbreakPath(pathStr)) {
-            NSLog(@"[IDFVSpoofer] Blocked lstat(): %s", path);
+            errno = ENOENT;
             return -1;
         }
     }
@@ -558,7 +733,7 @@ static BOOL isHiddenDylib(const char *path) {
     if (isEnabled(@"EnableFileSystemBypass") && path) {
         NSString *pathStr = [NSString stringWithUTF8String:path];
         if (isJailbreakPath(pathStr)) {
-            NSLog(@"[IDFVSpoofer] Blocked access(): %s", path);
+            errno = ENOENT;
             return -1;
         }
     }
@@ -570,17 +745,91 @@ static BOOL isHiddenDylib(const char *path) {
     if (isEnabled(@"EnableFileSystemBypass") && path) {
         NSString *pathStr = [NSString stringWithUTF8String:path];
         if (isJailbreakPath(pathStr)) {
-            NSLog(@"[IDFVSpoofer] Blocked fopen(): %s", path);
+            errno = ENOENT;
             return NULL;
         }
     }
     return %orig;
 }
 
+// Hook open() to block access to jailbreak files
+%hookf(int, open, const char *path, int oflag, ...) {
+    if (isEnabled(@"EnableFileSystemBypass") && path) {
+        NSString *pathStr = [NSString stringWithUTF8String:path];
+        if (isJailbreakPath(pathStr)) {
+            errno = ENOENT;
+            return -1;
+        }
+    }
+
+    // Handle variadic argument for mode
+    mode_t mode = 0;
+    if (oflag & O_CREAT) {
+        va_list args;
+        va_start(args, oflag);
+        mode = va_arg(args, int);
+        va_end(args);
+        return %orig(path, oflag, mode);
+    }
+    return %orig(path, oflag);
+}
+
+// Hook opendir() to block directory access
+%hookf(DIR *, opendir, const char *path) {
+    if (isEnabled(@"EnableFileSystemBypass") && path) {
+        NSString *pathStr = [NSString stringWithUTF8String:path];
+        if (isJailbreakPath(pathStr)) {
+            errno = ENOENT;
+            return NULL;
+        }
+    }
+    return %orig;
+}
+
+// Hook readlink() to hide symlinks
+%hookf(ssize_t, readlink, const char *path, char *buf, size_t bufsize) {
+    if (isEnabled(@"EnableFileSystemBypass") && path) {
+        NSString *pathStr = [NSString stringWithUTF8String:path];
+        if (isJailbreakPath(pathStr)) {
+            errno = ENOENT;
+            return -1;
+        }
+    }
+    return %orig;
+}
+
+// Hook realpath() to hide jailbreak paths
+%hookf(char *, realpath, const char *path, char *resolved_path) {
+    if (isEnabled(@"EnableFileSystemBypass") && path) {
+        NSString *pathStr = [NSString stringWithUTF8String:path];
+        if (isJailbreakPath(pathStr)) {
+            errno = ENOENT;
+            return NULL;
+        }
+    }
+    return %orig;
+}
+
+// Hook statfs() to hide filesystem info
+%hookf(int, statfs, const char *path, struct statfs *buf) {
+    if (isEnabled(@"EnableFileSystemBypass") && path) {
+        NSString *pathStr = [NSString stringWithUTF8String:path];
+        if (isJailbreakPath(pathStr)) {
+            errno = ENOENT;
+            return -1;
+        }
+    }
+    return %orig;
+}
+
+// Hook fstatfs()
+%hookf(int, fstatfs, int fd, struct statfs *buf) {
+    return %orig;
+}
+
 // Hook dlopen() to prevent loading detection
 %hookf(void *, dlopen, const char *path, int mode) {
     if (isEnabled(@"EnableAntiHookBypass") && path && isHiddenDylib(path)) {
-        NSLog(@"[IDFVSpoofer] Blocked dlopen(): %s", path);
         return NULL;
     }
     return %orig;
@@ -593,9 +842,40 @@ static BOOL isHiddenDylib(const char *path) {
         if ([sym containsString:@"MSHookFunction"] ||
             [sym containsString:@"MSHookMessageEx"] ||
             [sym containsString:@"MSGetImageByName"] ||
+            [sym containsString:@"MSFindSymbol"] ||
             [sym containsString:@"substitute_"] ||
-            [sym containsString:@"ellekit"]) {
-            NSLog(@"[IDFVSpoofer] Blocked dlsym(): %s", symbol);
+            [sym containsString:@"SubGetImageByName"] ||
+            [sym containsString:@"SubHookFunction"] ||
+            [sym containsString:@"LHHookFunction"] ||
+            [sym containsString:@"ellekit"] ||
+            [sym containsString:@"frida"] ||
+            [sym containsString:@"cycript"]) {
+            return NULL;
+        }
+    }
+    return %orig;
+}
+
+// Hook dladdr() to hide module info
+%hookf(int, dladdr, const void *addr, Dl_info *info) {
+    int result = %orig;
+    if (isEnabled(@"EnableAntiHookBypass") && result && info && info->dli_fname) {
+        if (isHiddenDylib(info->dli_fname)) {
+            return 0;
+        }
+    }
+    return result;
+}
+
+// Hook getenv() to hide environment variables
+%hookf(char *, getenv, const char *name) {
+    if (isEnabled(@"EnableJailbreakBypass") && name) {
+        NSString *envName = [NSString stringWithUTF8String:name];
+        if ([envName isEqualToString:@"DYLD_INSERT_LIBRARIES"] ||
+            [envName isEqualToString:@"DYLD_LIBRARY_PATH"] ||
+            [envName isEqualToString:@"DYLD_FRAMEWORK_PATH"] ||
+            [envName isEqualToString:@"_MSSafeMode"] ||
+            [envName isEqualToString:@"SUBSTRATE_SAFE_MODE"]) {
             return NULL;
         }
     }
@@ -619,48 +899,178 @@ static BOOL isHiddenDylib(const char *path) {
     return %orig;
 }
 
+// Hook sysctlbyname() for additional sysctl checks
+%hookf(int, sysctlbyname, const char *name, void *oldp, size_t *oldlenp, void *newp, size_t newlen) {
+    if (isEnabled(@"EnableAntiHookBypass") && name) {
+        // Block some hardware info that could be used for fingerprinting
+        // But allow most for normal app function
+    }
+    return %orig;
+}
+
+// Hook ptrace() to prevent anti-debugging
+%hookf(long, ptrace, int request, pid_t pid, caddr_t addr, int data) {
+    if (isEnabled(@"EnableAntiHookBypass")) {
+        if (request == PT_DENY_ATTACH) {
+            // Block anti-debugging attempt
+            return 0;
+        }
+    }
+    return %orig;
+}
+
+// Hook fork() - some apps try to fork to detect debugging
+%hookf(pid_t, fork) {
+    if (isEnabled(@"EnableJailbreakBypass")) {
+        // Return -1 to indicate fork is not allowed (like on non-jailbroken device)
+        errno = ENOSYS;
+        return -1;
+    }
+    return %orig;
+}
+
+// Hook vfork()
+%hookf(pid_t, vfork) {
+    if (isEnabled(@"EnableJailbreakBypass")) {
+        errno = ENOSYS;
+        return -1;
+    }
+    return %orig;
+}
+
+// Hook posix_spawn() - prevent spawning processes
+%hookf(int, posix_spawn, pid_t *pid, const char *path, const posix_spawn_file_actions_t *file_actions, const posix_spawnattr_t *attrp, char *const argv[], char *const envp[]) {
+    if (isEnabled(@"EnableJailbreakBypass") && path) {
+        NSString *pathStr = [NSString stringWithUTF8String:path];
+        if (isJailbreakPath(pathStr) ||
+            [pathStr containsString:@"sshd"] ||
+            [pathStr containsString:@"bash"] ||
+            [pathStr containsString:@"frida"]) {
+            return ENOENT;
+        }
+    }
+    return %orig;
+}
+
+// Hook system() - prevent shell commands
+%hookf(int, system, const char *command) {
+    if (isEnabled(@"EnableJailbreakBypass")) {
+        // Block all system() calls - non-jailbroken devices return -1
+        return -1;
+    }
+    return %orig;
+}
+
+// Hook popen() - prevent pipe commands
+%hookf(FILE *, popen, const char *command, const char *type) {
+    if (isEnabled(@"EnableJailbreakBypass")) {
+        // Block all popen() calls
+        return NULL;
+    }
+    return %orig;
+}
+
 // Hook _dyld_image_count to reduce image count
 %hookf(uint32_t, _dyld_image_count) {
     if (!isEnabled(@"EnableJailbreakBypass")) {
         return %orig;
     }
 
+    buildHiddenImageIndices();
     uint32_t count = %orig;
-    uint32_t hiddenCount = 0;
-
-    for (uint32_t i = 0; i < count; i++) {
-        const char *imageName = _dyld_get_image_name(i);
-        if (imageName && isHiddenDylib(imageName)) {
-            hiddenCount++;
-        }
-    }
-
-    return count - hiddenCount;
+    return count - (uint32_t)[g_hiddenImageIndices count];
 }
 
 // Hook _dyld_get_image_name to hide injected dylibs
 %hookf(const char *, _dyld_get_image_name, uint32_t image_index) {
-    const char *name = %orig;
-
-    if (isEnabled(@"EnableJailbreakBypass") && name && isHiddenDylib(name)) {
-        // Return empty string for hidden dylibs
-        return "";
+    if (!isEnabled(@"EnableJailbreakBypass")) {
+        return %orig;
     }
 
-    return name;
+    buildHiddenImageIndices();
+
+    // Adjust index to skip hidden images
+    uint32_t adjustedIndex = image_index;
+    uint32_t hiddenBefore = 0;
+
+    for (uint32_t i = 0; i <= adjustedIndex + hiddenBefore && i < g_originalImageCount; i++) {
+        if ([g_hiddenImageIndices containsIndex:i]) {
+            hiddenBefore++;
+        }
+    }
+
+    adjustedIndex = image_index + hiddenBefore;
+
+    if (adjustedIndex >= g_originalImageCount) {
+        return NULL;
+    }
+
+    // Skip if this adjusted index is hidden
+    while ([g_hiddenImageIndices containsIndex:adjustedIndex] && adjustedIndex < g_originalImageCount) {
+        adjustedIndex++;
+    }
+
+    if (adjustedIndex >= g_originalImageCount) {
+        return NULL;
+    }
+
+    return %orig(adjustedIndex);
 }
 
-// ==================== APPGUARD SPECIFIC HOOKS ====================
+// Hook _dyld_get_image_header similarly
+%hookf(const struct mach_header *, _dyld_get_image_header, uint32_t image_index) {
+    if (!isEnabled(@"EnableJailbreakBypass")) {
+        return %orig;
+    }
 
-// Try to hook AppGuard's jailbreak check directly
+    buildHiddenImageIndices();
+
+    uint32_t adjustedIndex = image_index;
+    uint32_t hiddenBefore = 0;
+
+    for (uint32_t i = 0; i <= adjustedIndex + hiddenBefore && i < g_originalImageCount; i++) {
+        if ([g_hiddenImageIndices containsIndex:i]) {
+            hiddenBefore++;
+        }
+    }
+
+    adjustedIndex = image_index + hiddenBefore;
+
+    while ([g_hiddenImageIndices containsIndex:adjustedIndex] && adjustedIndex < g_originalImageCount) {
+        adjustedIndex++;
+    }
+
+    if (adjustedIndex >= g_originalImageCount) {
+        return NULL;
+    }
+
+    return %orig(adjustedIndex);
+}
+
+// ==================== CONSTRUCTOR ====================
+
 %ctor {
     @autoreleasepool {
+        // Check if we should load for this app
+        NSString *bundleID = [[NSBundle mainBundle] bundleIdentifier];
+
+        // Only load for GGPoker apps
+        if (!bundleID ||
+            (![bundleID containsString:@"ggpcom"] &&
+             ![bundleID containsString:@"ggpoker"] &&
+             ![bundleID containsString:@"natural8"] &&
+             ![bundleID containsString:@"nsus"])) {
+            NSLog(@"[IDFVSpoofer] Skipping for bundle: %@", bundleID);
+            return;
+        }
+
+        NSLog(@"[IDFVSpoofer] === v6.1.0 Loading for: %@ ===", bundleID);
+
         loadSettings();
         initJailbreakPaths();
         initJailbreakSchemes();
         initHiddenDylibs();
-
-        NSLog(@"[IDFVSpoofer] === v6.0.0 Constructor ===");
+        buildHiddenImageIndices();
 
         // Clear keychain on first launch if enabled
         if (isEnabled(@"EnableKeychainClear")) {
@@ -682,22 +1092,24 @@ static BOOL isHiddenDylib(const char *path) {
             }
         }
 
+        g_initialized = YES;
+
         // Show popup if enabled
         if (isEnabled(@"EnablePopup")) {
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
                 initSpoofedValues();
 
                 NSString *message = [NSString stringWithFormat:
-                    @"IDFVSpoofer v6.0.0 Active\n\n"
+                    @"IDFVSpoofer v6.1.0 Active\n\n"
                     @"IDFV: %@\n\n"
-                    @"IDFA: %@\n\n"
                     @"Jailbreak Bypass: %@\n"
                     @"Anti-Hook Bypass: %@\n"
+                    @"File System Bypass: %@\n"
                     @"Keychain Cleared: %@",
                     g_spoofedIDFVString,
-                    g_spoofedIDFAString,
                     isEnabled(@"EnableJailbreakBypass") ? @"ON" : @"OFF",
                     isEnabled(@"EnableAntiHookBypass") ? @"ON" : @"OFF",
+                    isEnabled(@"EnableFileSystemBypass") ? @"ON" : @"OFF",
                     g_keychainCleared ? @"YES" : @"NO"
                 ];
 
@@ -711,37 +1123,29 @@ static BOOL isHiddenDylib(const char *path) {
                     style:UIAlertActionStyleDefault
                     handler:nil]];
 
-                // Add reset button
-                [alert addAction:[UIAlertAction
-                    actionWithTitle:@"Reset All IDs"
-                    style:UIAlertActionStyleDestructive
-                    handler:^(UIAlertAction *action) {
-                        [[NSUserDefaults standardUserDefaults] removeObjectForKey:@"_spoofed_idfv_v6"];
-                        [[NSUserDefaults standardUserDefaults] removeObjectForKey:@"_idfvspoofer_keychain_cleared_v6"];
-                        [[NSUserDefaults standardUserDefaults] removeObjectForKey:@"_idfvspoofer_appsflyer_reset_v6"];
-                        [[NSUserDefaults standardUserDefaults] synchronize];
+                UIWindow *window = nil;
+                if (@available(iOS 13.0, *)) {
+                    for (UIWindowScene *scene in [UIApplication sharedApplication].connectedScenes) {
+                        if (scene.activationState == UISceneActivationStateForegroundActive) {
+                            window = scene.windows.firstObject;
+                            break;
+                        }
+                    }
+                }
+                if (!window) {
+                    window = [[UIApplication sharedApplication] keyWindow];
+                }
 
-                        // Force regeneration
-                        g_spoofedIDFV = nil;
-                        g_keychainCleared = NO;
-
-                        UIAlertController *confirm = [UIAlertController
-                            alertControllerWithTitle:@"Reset Complete"
-                            message:@"Please restart the app for changes to take effect."
-                            preferredStyle:UIAlertControllerStyleAlert];
-                        [confirm addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
-
-                        UIWindow *window = [[UIApplication sharedApplication] keyWindow];
-                        [window.rootViewController presentViewController:confirm animated:YES completion:nil];
-                    }]];
-
-                UIWindow *window = [[UIApplication sharedApplication] keyWindow];
                 if (window && window.rootViewController) {
-                    [window.rootViewController presentViewController:alert animated:YES completion:nil];
+                    UIViewController *topVC = window.rootViewController;
+                    while (topVC.presentedViewController) {
+                        topVC = topVC.presentedViewController;
+                    }
+                    [topVC presentViewController:alert animated:YES completion:nil];
                 }
             });
         }
 
-        NSLog(@"[IDFVSpoofer] Constructor complete");
+        NSLog(@"[IDFVSpoofer] === v6.1.0 Loaded Successfully ===");
     }
 }
