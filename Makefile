@@ -6,7 +6,7 @@ include $(THEOS)/makefiles/common.mk
 TWEAK_NAME = IDFVSpoofer
 
 IDFVSpoofer_FILES = Tweak.x
-IDFVSpoofer_CFLAGS = -fobjc-arc -Wno-deprecated-declarations
+IDFVSpoofer_CFLAGS = -fno-objc-arc -Wno-deprecated-declarations
 IDFVSpoofer_FRAMEWORKS = UIKit Foundation Security
 
 include $(THEOS_MAKE_PATH)/tweak.mk
