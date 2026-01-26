@@ -50,10 +50,7 @@
 #define PT_DENY_ATTACH 31
 extern long ptrace(int request, pid_t pid, void *addr, int data);
 
-// stat64 structure for older iOS
-#ifndef stat64
-#define stat64 stat
-#endif
+// NOTE: stat64/lstat64 not used - arm64 stat is already 64-bit
 
 // ==================== SETTINGS ====================
 // Support both rootless and rootful paths
@@ -830,29 +827,8 @@ static BOOL isHiddenDylib(const char *path) {
     return %orig;
 }
 
-// NEW: Hook stat64() for 64-bit stat
-%hookf(int, stat64, const char *path, struct stat64 *buf) {
-    if (isEnabled(@"EnableFileSystemBypass") && path) {
-        NSString *pathStr = [NSString stringWithUTF8String:path];
-        if (isJailbreakPath(pathStr)) {
-            errno = ENOENT;
-            return -1;
-        }
-    }
-    return %orig;
-}
-
-// NEW: Hook lstat64() for 64-bit lstat
-%hookf(int, lstat64, const char *path, struct stat64 *buf) {
-    if (isEnabled(@"EnableFileSystemBypass") && path) {
-        NSString *pathStr = [NSString stringWithUTF8String:path];
-        if (isJailbreakPath(pathStr)) {
-            errno = ENOENT;
-            return -1;
-        }
-    }
-    return %orig;
-}
+// NOTE: stat64/lstat64 removed - not available on modern iOS arm64
+// stat/lstat are already 64-bit on arm64
 
 // Hook access() to hide jailbreak files
 %hookf(int, access, const char *path, int mode) {
