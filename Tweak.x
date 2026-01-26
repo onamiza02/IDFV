@@ -1088,19 +1088,8 @@ static BOOL isHiddenDylib(const char *path) {
     return %orig;
 }
 
-// NEW: Hook syscall() to block direct syscalls
-%hookf(int, syscall, int number, ...) {
-    if (isEnabled(@"EnableAntiHookBypass")) {
-        // Block ptrace syscall
-        if (number == SYS_ptrace) {
-            return 0;
-        }
-    }
-
-    // For other syscalls, need to forward variadic args
-    // This is complex, so we just call orig for most cases
-    return %orig;
-}
+// NOTE: syscall() hook removed - variadic functions not supported by Logos
+// ptrace blocking is handled by the ptrace() hook below
 
 // Hook ptrace() to prevent anti-debugging
 %hookf(long, ptrace, int request, pid_t pid, void *addr, int data) {
