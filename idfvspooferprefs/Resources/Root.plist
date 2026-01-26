@@ -195,7 +195,7 @@
 			<key>cell</key>
 			<string>PSStaticTextCell</string>
 			<key>label</key>
-			<string>IDFVSpoofer v6.0.0</string>
+			<string>IDFVSpoofer v6.1.0</string>
 		</dict>
 		<dict>
 			<key>cell</key>

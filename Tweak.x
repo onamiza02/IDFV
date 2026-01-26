@@ -143,6 +143,36 @@ static void initJailbreakPaths() {
             @"/usr/sbin/frida-server",
             @"/usr/bin/frida-server",
             @"/usr/lib/frida",
+
+            // Additional rootless paths (Dopamine/Palera1n)
+            @"/var/binpack",
+            @"/var/checkra1n.dmg",
+            @"/var/LIB",
+            @"/var/ulb",
+            @"/var/db/stash",
+            @"/var/jb/usr/libexec",
+            @"/var/jb/Library/Frameworks",
+            @"/var/jb/Library/PreferenceBundles",
+            @"/var/jb/Library/MobileSubstrate/DynamicLibraries",
+
+            // CydiaSubstrate framework
+            @"/Library/Frameworks/CydiaSubstrate.framework",
+
+            // Procursus/Elucubratus
+            @"/var/jb/procursus",
+            @"/.procursus_strapped",
+            @"/.bootstrapped",
+
+            // Trollstore
+            @"/var/containers/Bundle/Application/.TrollStore",
+
+            // More common detection files
+            @"/etc/apt/sources.list.d",
+            @"/etc/ssh/sshd_config",
+            @"/usr/share/terminfo",
+            @"/usr/local/bin",
+            @"/Library/dpkg",
+            @"/Library/LaunchDaemons",
         ];
     }
 }
@@ -216,48 +246,35 @@ static void loadSettings() {
     NSString *prefsPath = getPreferencesPath();
     g_settings = [NSDictionary dictionaryWithContentsOfFile:prefsPath];
 
-    // Also check NSUserDefaults (preference bundle writes here)
+    // Also check CFPreferences (preference bundle writes here)
     if (!g_settings) {
         CFPreferencesAppSynchronize(CFSTR("com.custom.idfvspoofer"));
 
         NSMutableDictionary *prefs = [NSMutableDictionary dictionary];
 
-        CFBooleanRef val;
-        val = (CFBooleanRef)CFPreferencesCopyAppValue(CFSTR("EnableIDFV"), CFSTR("com.custom.idfvspoofer"));
-        prefs[@"EnableIDFV"] = val ? @(CFBooleanGetValue(val)) : @YES;
-        if (val) CFRelease(val);
+        // Helper block to safely read CFPreferences
+        BOOL (^readBoolPref)(CFStringRef, BOOL) = ^BOOL(CFStringRef key, BOOL defaultVal) {
+            CFPropertyListRef val = CFPreferencesCopyAppValue(key, CFSTR("com.custom.idfvspoofer"));
+            if (val) {
+                BOOL result = defaultVal;
+                if (CFGetTypeID(val) == CFBooleanGetTypeID()) {
+                    result = CFBooleanGetValue((CFBooleanRef)val);
+                }
+                CFRelease(val);
+                return result;
+            }
+            return defaultVal;
+        };
 
-        val = (CFBooleanRef)CFPreferencesCopyAppValue(CFSTR("EnableIDFA"), CFSTR("com.custom.idfvspoofer"));
-        prefs[@"EnableIDFA"] = val ? @(CFBooleanGetValue(val)) : @YES;
-        if (val) CFRelease(val);
-
-        val = (CFBooleanRef)CFPreferencesCopyAppValue(CFSTR("EnableNSUserDefaults"), CFSTR("com.custom.idfvspoofer"));
-        prefs[@"EnableNSUserDefaults"] = val ? @(CFBooleanGetValue(val)) : @YES;
-        if (val) CFRelease(val);
-
-        val = (CFBooleanRef)CFPreferencesCopyAppValue(CFSTR("EnableKeychainClear"), CFSTR("com.custom.idfvspoofer"));
-        prefs[@"EnableKeychainClear"] = val ? @(CFBooleanGetValue(val)) : @YES;
-        if (val) CFRelease(val);
-
-        val = (CFBooleanRef)CFPreferencesCopyAppValue(CFSTR("EnableJailbreakBypass"), CFSTR("com.custom.idfvspoofer"));
-        prefs[@"EnableJailbreakBypass"] = val ? @(CFBooleanGetValue(val)) : @YES;
-        if (val) CFRelease(val);
-
-        val = (CFBooleanRef)CFPreferencesCopyAppValue(CFSTR("EnableAntiHookBypass"), CFSTR("com.custom.idfvspoofer"));
-        prefs[@"EnableAntiHookBypass"] = val ? @(CFBooleanGetValue(val)) : @YES;
-        if (val) CFRelease(val);
-
-        val = (CFBooleanRef)CFPreferencesCopyAppValue(CFSTR("EnableFileSystemBypass"), CFSTR("com.custom.idfvspoofer"));
-        prefs[@"EnableFileSystemBypass"] = val ? @(CFBooleanGetValue(val)) : @YES;
-        if (val) CFRelease(val);
-
-        val = (CFBooleanRef)CFPreferencesCopyAppValue(CFSTR("EnableAppsFlyerReset"), CFSTR("com.custom.idfvspoofer"));
-        prefs[@"EnableAppsFlyerReset"] = val ? @(CFBooleanGetValue(val)) : @YES;
-        if (val) CFRelease(val);
-
-        val = (CFBooleanRef)CFPreferencesCopyAppValue(CFSTR("EnablePopup"), CFSTR("com.custom.idfvspoofer"));
-        prefs[@"EnablePopup"] = val ? @(CFBooleanGetValue(val)) : @YES;
-        if (val) CFRelease(val);
+        prefs[@"EnableIDFV"] = @(readBoolPref(CFSTR("EnableIDFV"), YES));
+        prefs[@"EnableIDFA"] = @(readBoolPref(CFSTR("EnableIDFA"), YES));
+        prefs[@"EnableNSUserDefaults"] = @(readBoolPref(CFSTR("EnableNSUserDefaults"), YES));
+        prefs[@"EnableKeychainClear"] = @(readBoolPref(CFSTR("EnableKeychainClear"), YES));
+        prefs[@"EnableJailbreakBypass"] = @(readBoolPref(CFSTR("EnableJailbreakBypass"), YES));
+        prefs[@"EnableAntiHookBypass"] = @(readBoolPref(CFSTR("EnableAntiHookBypass"), YES));
+        prefs[@"EnableFileSystemBypass"] = @(readBoolPref(CFSTR("EnableFileSystemBypass"), YES));
+        prefs[@"EnableAppsFlyerReset"] = @(readBoolPref(CFSTR("EnableAppsFlyerReset"), YES));
+        prefs[@"EnablePopup"] = @(readBoolPref(CFSTR("EnablePopup"), YES));
 
         g_settings = prefs;
     }
@@ -1031,6 +1048,45 @@ static BOOL isHiddenDylib(const char *path) {
     }
 
     return %orig(adjustedIndex);
+}
+
+// Hook _dyld_get_image_vmaddr_slide similarly
+%hookf(intptr_t, _dyld_get_image_vmaddr_slide, uint32_t image_index) {
+    if (!isEnabled(@"EnableJailbreakBypass")) {
+        return %orig;
+    }
+
+    buildHiddenImageIndices();
+
+    uint32_t adjustedIndex = image_index;
+    uint32_t hiddenBefore = 0;
+
+    for (uint32_t i = 0; i <= adjustedIndex + hiddenBefore && i < g_originalImageCount; i++) {
+        if ([g_hiddenImageIndices containsIndex:i]) {
+            hiddenBefore++;
+        }
+    }
+
+    adjustedIndex = image_index + hiddenBefore;
+
+    while ([g_hiddenImageIndices containsIndex:adjustedIndex] && adjustedIndex < g_originalImageCount) {
+        adjustedIndex++;
+    }
+
+    if (adjustedIndex >= g_originalImageCount) {
+        return 0;
+    }
+
+    return %orig(adjustedIndex);
+}
+
+// Hook getppid() - Parent process ID check (some detectors check if parent is launchd)
+%hookf(pid_t, getppid) {
+    if (isEnabled(@"EnableJailbreakBypass")) {
+        // Return 1 (launchd) - normal for iOS apps
+        return 1;
+    }
+    return %orig;
 }
 
 // ==================== CONSTRUCTOR ====================
